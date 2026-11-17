@@ -1,0 +1,6 @@
+# The chat-a2ui bundle patch: one host row owns the chat preset and, in a
+# later phase, the model-facing A2UI surface tool.
+- insert:
+    - id: chat-a2ui
+      name: dsh-chat-a2ui
+      config: {}

@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# build scratch
+.build/
+*.tsbuildinfo
+
+# isolated test homes / CLI (local verification only)
+.dsh-test-home/
+.dsh-test-cli/
+test-assets/
+
+# agent workspace artifacts (showme pages, screenshots, drafts)
+.dsh/
+
+# logs / OS noise
+*.log
+.DS_Store
+Thumbs.db
