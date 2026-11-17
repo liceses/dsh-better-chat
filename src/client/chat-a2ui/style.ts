@@ -953,6 +953,61 @@ export const CHAT_CSS = `
 }
 
 /* ---------------------------------------------------------------------------
+   上下文注入：系统旁白，折叠显示，不占用户气泡
+   --------------------------------------------------------------------------- */
+.caui-context {
+  width: min(100%, 680px);
+  border: 1px solid var(--caui-border);
+  border-radius: var(--caui-radius-sm);
+  background: var(--caui-subtle);
+  color: var(--caui-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.caui-context-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--caui-muted);
+}
+
+.caui-context-summary::-webkit-details-marker {
+  display: none;
+}
+
+.caui-context-summary::before {
+  content: '⌁';
+  flex: none;
+  width: 14px;
+  text-align: center;
+  color: var(--caui-border-strong);
+}
+
+.caui-context-label {
+  font-weight: 500;
+}
+
+.caui-context-summary .caui-time {
+  margin-left: auto;
+}
+
+.caui-context-text {
+  margin: 0;
+  padding: 0 10px 8px 32px;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--caui-muted);
+  font-family: var(--caui-sans);
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------------
    命令 / 压缩 / 未知节点
    --------------------------------------------------------------------------- */
 .caui-command {

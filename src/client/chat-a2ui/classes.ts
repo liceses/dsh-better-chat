@@ -67,6 +67,11 @@ export const cls = {
   lightboxImage: 'caui-lightbox-image',
   lightboxClose: 'caui-lightbox-close',
 
+  context: 'caui-context',
+  contextSummary: 'caui-context-summary',
+  contextLabel: 'caui-context-label',
+  contextText: 'caui-context-text',
+
   notice: 'caui-notice',
   noticeIcon: 'caui-notice-icon',
   noticeText: 'caui-notice-text',

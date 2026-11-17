@@ -187,6 +187,42 @@ function splitUserContent (content: unknown): UserParts {
   return parts
 }
 
+/** 上下文注入优先用 source.sections 的可读文本，避免把 <system-reminder> 原样摊开。 */
+function readContextText (data: UserMessageData): string {
+  const source = asRecord(asRecord(data)?.source)
+  const sections = source?.['sections']
+  if (Array.isArray(sections)) {
+    const lines: string[] = []
+    for (const item of sections) {
+      const section = asRecord(item)
+      const text = readString(section, 'text')
+      if (text !== undefined) lines.push(text)
+    }
+    if (lines.length > 0) return lines.join('\n')
+  }
+  return splitUserContent(data.content).texts.join('\n\n').trim()
+}
+
+/** 上下文注入是系统旁白，不该占用户气泡；折叠成一条可展开的提示。 */
+function ContextRow ({ data }: { data: UserMessageData }): ReactElement | null {
+  const text = readContextText(data)
+  if (text === '') return null
+  const time = readFiniteNumber(data.time)
+  return (
+    <RowFrame kind="context" variant={cls.rowNotice}>
+      <details className={cls.context}>
+        <summary className={cls.contextSummary}>
+          <span className={cls.contextLabel}>已注入上下文</span>
+          {time === undefined ? null : (
+            <time className={cls.time} dateTime={safeIso(time)}>{formatClock(time)}</time>
+          )}
+        </summary>
+        <pre className={cls.contextText}>{text}</pre>
+      </details>
+    </RowFrame>
+  )
+}
+
 function UserRow ({ data, loadImage }: { data: UserMessageData; loadImage: LoadImage }): ReactElement {
   const parts = splitUserContent(data.content)
   const time = readFiniteNumber(data.time)
@@ -497,8 +533,9 @@ export const ChatRow = memo(function ChatRow (props: ChatRowProps): ReactElement
   switch (kind) {
     case 'user':
     case 'steering':
-    case 'context':
       return <UserRow data={data as UserMessageData} loadImage={loadImage} />
+    case 'context':
+      return <ContextRow data={data as UserMessageData} />
     case 'assistant-step':
       return <AssistantRow data={data as AssistantData} loadImage={loadImage} />
     case 'tool-call':

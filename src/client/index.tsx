@@ -13,6 +13,7 @@ import type { ImageAttachmentRef, SessionsApi, WorkspacesApi } from './chat-a2ui
 import { CHAT_VIEW_ID, CHAT_VIEW_LABEL } from './constants'
 import { installChatRuntime, type ChatHostRuntime } from './runtime'
 import { createChatSession, forkChatAt, seedChatViews } from './session/actions'
+import { ChatViewSync } from './session/ChatViewSync'
 import { NewChatButton } from './session/NewChatButton'
 
 /** Client services consumed by this plugin. */
@@ -82,25 +83,33 @@ export function apply (ctx: ClientContext): void {
     }),
   }, NewChatButton))
 
+  // The native preset picker opens the blank Session before the user picks
+  // Chat, so its View store can initialize from the old preference. Restore
+  // the stored Chat UI choice once the tab row appears, through the same click
+  // path a user takes; never fight a later manual switch back to 对话.
+  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+    name: 'conversation.session.header.actions',
+    id: 'chat-a2ui-view-sync',
+    order: 10,
+  }, ChatViewSync))
+
   // Existing chat Sessions may predate this plugin. Seed only missing string
   // preferences; a deliberate native "chat" choice is never overwritten.
+  // The write must stay synchronous with the Session-list notification: a
+  // microtask would let the newly opened Session's View store initialize from
+  // the old preference first. ChatViewSync is the fallback; keeping this path
+  // synchronous means the common case never needs it.
   ctx.effect(() => {
-    let queued = false
-    const seedSoon = (): void => {
-      if (queued) return
-      queued = true
-      queueMicrotask(() => {
-        queued = false
-        try {
-          const written = seedChatViews(runtime)
-          if (written > 0) console.info(`chat-a2ui: selected Chat UI for ${written} session(s)`)
-        } catch (error: unknown) {
-          console.warn('chat-a2ui: could not seed view preferences', error)
-        }
-      })
+    const seedNow = (): void => {
+      try {
+        const written = seedChatViews(runtime)
+        if (written > 0) console.info(`chat-a2ui: selected Chat UI for ${written} session(s)`)
+      } catch (error: unknown) {
+        console.warn('chat-a2ui: could not seed view preferences', error)
+      }
     }
-    const stop = ctx.sessions.list.subscribe(seedSoon)
-    seedSoon()
+    const stop = ctx.sessions.list.subscribe(seedNow)
+    seedNow()
     return stop
   }, 'chat-a2ui: seed Chat UI view preference')
 }
