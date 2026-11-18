@@ -196,17 +196,15 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
         }
       }
 
+      if (!sticking) return
+
       const state = followRef.current ?? createFollowState(at, contentHeight, applied)
       const result = stepFollow(state, { height: contentHeight, viewport, at, config: MOTION.scroll })
       followRef.current = result.state
-      let nextSpace = result.space
-      if (!sticking) {
-        // 不跟随时只负责把占位收回去；但收缩量不能超过「当前位置到真底部」的
-        // 距离，否则浏览器会把 scrollTop 夹一下——那就是一次可见的跳动。
-        const gap = Math.max(0, element.scrollHeight - element.scrollTop - element.clientHeight)
-        nextSpace = Math.min(nextSpace, gap)
-      }
-      applySpace(nextSpace)
+      // 不跟随时**完全不碰占位**。占位在内容之后：只要它比「当前位置到真底部」
+      // 的距离大，收掉它就会让浏览器夹一次 scrollTop —— 用户看到的就是内容
+      // 猛地往下掉一截。等用户自己滚回底部、重新贴底之后，再由循环平滑地收。
+      applySpace(result.space)
       const before = element.scrollTop
       if (sticking) {
         // 每帧都写、每帧都记：这样 writtenRef 永远是「我们最后一次摆的位置」，
@@ -295,9 +293,9 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       userScrollAtRef.current = Date.now()
 
       const wasSticking = stickRef.current
-      // 距离要按真正滚动的那一层算。余量现在是**布局里的占位**而不是滚动偏移，
-      // 所以这里不用扣：贴底时距离本来就是 0。
-      const distance = owner.scrollHeight - currentTop - owner.clientHeight
+      // 距离按「内容底部」算，要扣掉尾部占位：占位在内容之后，用户滚到最底时
+      // 距内容底部其实是负的（正停在占位里），不扣就会以为他还没到底。
+      const distance = owner.scrollHeight - currentTop - owner.clientHeight - spaceRef.current
       // 只有「用户自己往下滚回底部」才重新吸附。我们清占位时浏览器会夹一次
       // scrollTop，那会让距离瞬间变 0；如果按距离吸附，就会立刻又被拉到底部，
       // 用户看到的就是「滚一下、被弹回去」。
