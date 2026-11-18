@@ -114,8 +114,6 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
 
   const containerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  // 消息流末尾的可变占位：跟随器直接写它的高度，用来「预先」让出底部空间。
-  const tailRef = useRef<HTMLDivElement>(null)
   const keys = Array.isArray(order) ? order : []
   // Chat 主面板里消息区必须自己拥有滚动：原生 viewArea 的高度已经扣掉了
   // composer，让外层滚动会让内容伸到输入框底下（viewArea 不会跟着长高）。
@@ -126,7 +124,6 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
     contentRef,
     revision: keys.length,
     forceInner,
-    tailRef,
   })
 
   const rowTransition = animated ? spring : { duration: 0 }
@@ -188,7 +185,7 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
               ))}
             </AnimatePresence>
           )}
-          <div ref={tailRef} className="caui-flow-tail" aria-hidden="true" />
+
         </div>
         <ScrollToBottomButton atBottom={atBottom} onScrollToBottom={scrollToBottom} />
       </div>

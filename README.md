@@ -226,6 +226,29 @@ __cauiProbe.off()       // 停止记录
 
 探针状态挂在 `window.__cauiProbeState` 而不是模块作用域——插件 bundle 被宿主求值不止一次时，模块级变量会分裂成两份（HUD 有数、`tail()` 读出 0）。
 
+## 跟随核心算法（先验证，再接界面）
+
+滚动跟随的纯函数在 `src/client/chat-a2ui/scroll-follow.ts`，它的三条性质是**设计出来的**，不是调出来的：
+
+1. **位置是独立状态**（不是 `scrollTop = 内容高度 - 视口`），所以内容一次到多少都不会直接把位置拽走；
+2. **单帧位移 ≤ `maxSpeed × dt`**：900px 的整段到达也只是一段约 0.35s 的滑行；
+3. **余量（margin）** 让目标停在内容底部之上，并按生成速度预开——所以最后一行不会顶着视口下沿出现。
+
+改这三个数之前先跑离线验证，它会按 60fps 在 7 种「宿主投喂模式」（token 级 → 900px 整段 / 停顿后爆发）下模拟，并检查单帧位移、方向反转、结束落点；任何一条不满足就以非零码退出：
+
+```powershell
+npm run sim:scroll
+```
+
+```
+模式 | maxMove | p95 | marginMin | marginMax | finalGap | 方向反转
+token 级（每帧 20px） | 21 | 20 | 177 | 177 | 0 | 2
+900px / 3s（整段）     | 43 | 43 | 177 | 177 | 0 | 0
+上限 maxSpeed×dt = 44.3px；全部通过
+```
+
+同一套场景也在 `tests/scroll-follow.test.ts` 里做了断言，所以 `npm test` 会一起守住。
+
 ## 开发
 
 ```powershell
@@ -233,6 +256,7 @@ npm run typecheck
 npm test
 npm run build
 node scripts/verify-bundle.mjs
+npm run sim:scroll     # 跟随核心的离线仿真（也进 tests）
 ```
 
 `npm run build` 产出：

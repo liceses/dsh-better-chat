@@ -47,27 +47,22 @@ export interface MotionConfig {
     scaleDistance: number
     rotateYDistance: number
   }
-  /** 贴底跟随：动态底部余量 + 前馈限速。 */
+  /** 贴底跟随：限速跟随 + 速度相关的底部余量。 */
   scroll: {
     /** 生成期间的最低底部余量（px）。 */
-    minSpace: number
+    minMargin: number
     /** 余量上限（占视口比例）。 */
-    maxSpaceRatio: number
+    maxMarginRatio: number
     /** 余量 = 速度 × lead（s）。 */
     lead: number
-    /** 按最近单批高度预留的比例，以及它的记忆衰减（px/s）。 */
-    burstFactor: number
-    burstDecay: number
-    /** 前馈速度的上下限（px/s）与限速倍数。 */
-    paceMin: number
-    paceMax: number
-    velocityCap: number
-    /** 反馈增益（1/s）与速度变化率上限（px/s²）。 */
+    /** 起步速度（px/s）、距离增益（1/s）、速度上限（px/s）。 */
+    speed: number
     gain: number
-    accel: number
-    /** 估速的长时间常数（s）与停止后的保持时间（ms）。 */
+    maxSpeed: number
+    /** 估速的长时间常数（s）、停止后余量保持（ms）、收回时间常数（s）。 */
     speedTau: number
     holdMs: number
+    releaseTau: number
     instantAbove: number
   }
   /** 流式尾巴的模糊渐入：模糊半径、单字时长、相邻字错开、每帧最多处理多少字。 */
@@ -113,18 +108,15 @@ export const DEFAULT_MOTION: MotionConfig = {
     rotateYDistance: 10,
   },
   scroll: {
-    minSpace: 200,
-    maxSpaceRatio: 0.7,
-    lead: 0.55,
-    burstFactor: 1,
-    burstDecay: 30,
-    paceMin: 260,
-    paceMax: 4000,
-    velocityCap: 1.35,
-    gain: 5,
-    accel: 9000,
+    minMargin: 120,
+    maxMarginRatio: 0.35,
+    lead: 0.4,
+    speed: 900,
+    gain: 2.6,
+    maxSpeed: 2600,
     speedTau: 0.35,
     holdMs: 3200,
+    releaseTau: 0.45,
     instantAbove: 1600,
   },
   stream: { blur: 9, duration: 0.42, stagger: 0.004, maxChars: 140, clipSpeed: 1000, clipMin: 0.12, clipMax: 0.95 },
@@ -187,18 +179,15 @@ num('shimmer.xDistance', -30, 30)
 num('shimmer.yDistance', -30, 30)
 num('shimmer.scaleDistance', 0.2, 2)
 num('shimmer.rotateYDistance', -90, 90)
-num('scroll.minSpace', 0, 400)
-num('scroll.maxSpaceRatio', 0, 1)
+num('scroll.minMargin', 0, 400)
+num('scroll.maxMarginRatio', 0, 1)
 num('scroll.lead', 0, 3)
-num('scroll.burstFactor', 0, 3)
-num('scroll.burstDecay', 0, 2000)
-num('scroll.paceMin', 0, 4000)
-num('scroll.paceMax', 50, 8000)
-num('scroll.velocityCap', 0.2, 6)
+num('scroll.speed', 100, 6000)
+num('scroll.gain', 0, 20)
+num('scroll.maxSpeed', 200, 12000)
 num('scroll.speedTau', 0.05, 4)
 num('scroll.holdMs', 0, 6000)
-num('scroll.gain', 0.5, 40)
-num('scroll.accel', 500, 40000)
+num('scroll.releaseTau', 0.05, 4)
 num('scroll.instantAbove', 200, 20000)
 num('stream.blur', 0, 24)
 num('stream.duration', 0.05, 2)

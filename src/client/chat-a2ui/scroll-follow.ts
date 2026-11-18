@@ -1,58 +1,55 @@
 /**
- * 流式跟随：动态底部余量（spacer）+ 前馈限速。
+ * 贴底跟随的核心算法：限速跟随 + 速度相关的底部余量。
  *
- * 问题：宿主按批提交正文，一批能有半屏高。跟着内容贴底的话，最后一行总在
- * 屏幕下沿出现、再被下一批顶上去——读的人一直在追边。
+ * 设计约束（为什么长这样）：
  *
- * 做法：消息流末尾放一个**可变高度的占位**（`space`）=「最后一行到视口下沿
- * 的距离」，滚动位置钉在「内容 + 占位」的底部：
- * - 内容增长 → 占位先被吃掉，画面不动（不会被顶上来）；
- * - 占位按**前馈 + 反馈**回涨：前馈是平滑后的生成速度，反馈把余量拉回目标；
- * - 目标余量同时看「生成速度」和「最近单批的高度」——后者决定一次能吸收多少；
- * - 速度变化率有限制（`accel`），起步收尾有惯性。
+ * 1. **位置必须是独立状态**，不能写成 `scrollTop = 内容高度 - 视口`。
+ *    后者把位置和内容绑死：内容一帧长 500px，位置就只能一帧跳 500px，
+ *    任何「平滑」都无从谈起。这里位置自己走，速度有上限。
  *
- * 纯函数：不读 DOM、不依赖帧率。
+ * 2. **每帧位移的上限 = maxSpeed × dt**，与内容一次来多少无关。
+ *    900px 的整段到达也只是一段约 0.35s 的滑行，而不是一帧跳过去。
+ *
+ * 3. **余量（margin）让目标位置停在内容底部之上**，所以最后一行不会顶着
+ *    视口下沿出现；余量按生成速度预开（速度 × lead），停下后收回。
+ *
+ * 4. 内容比视口短、或用户往上滚时，位置被夹在 [0, 内容底部]。
+ *
+ * 纯函数：不读 DOM、不依赖帧率，可直接离线仿真。
  */
 
 /** 跟随参数（来自 motion.config.json 的 scroll.*）。 */
 export interface FollowConfig {
   /** 生成期间的最低底部余量（px）。 */
-  minSpace: number
+  minMargin: number
   /** 余量上限（占视口高度的比例，0–1）。 */
-  maxSpaceRatio: number
+  maxMarginRatio: number
   /** 余量 = 速度 × lead（s）。 */
   lead: number
-  /** 按「最近单批高度」预留的比例。 */
-  burstFactor: number
-  /** 单批高度的记忆衰减（px/s）。 */
-  burstDecay: number
-  /** 前馈速度的上下限（px/s）。 */
-  paceMin: number
-  paceMax: number
-  /** 速度上限 = pace × velocityCap。 */
-  velocityCap: number
-  /** 反馈增益（1/s）。 */
+  /** 起步速度（px/s）与距离增益（1/s）。 */
+  speed: number
   gain: number
-  /** 速度变化率上限（px/s²）。 */
-  accel: number
+  /** 速度上限（px/s）。 */
+  maxSpeed: number
   /** 估速的长时间常数（s）。 */
   speedTau: number
-  /** 停止增长后多久把余量收回（ms）。 */
+  /** 停止增长后余量保持多久（ms）。 */
   holdMs: number
-  instantAbove: number
+  /** 余量收回的时间常数（s）。 */
+  releaseTau: number
 }
 
 export interface FollowState {
+  /** 当前 scrollTop。 */
+  position: number
   /** 当前底部余量（px）。 */
-  space: number
-  /** 余量变化速度（px/s，正 = 让出空间 = 画面上移）。 */
-  velocity: number
+  margin: number
   /** 生成速度的平滑值（px/s）。 */
   rate: number
-  /** 上一次看到的内容高度（不含占位）。 */
+  /** 生成速度的峰值保持（慢衰减），余量按它来算，避免批次抖动带着余量抖。 */
+  ratePeak: number
+  /** 上一次看到的内容高度（不含任何占位）。 */
   height: number
-  /** 最近一次单批增长的高度（px），缓慢衰减。 */
-  burstMax: number
   /** 上一次推进的时刻（ms）。 */
   at: number
   /** 上一次看到增长的时刻（ms）。 */
@@ -65,15 +62,24 @@ export const MAX_FRAME_SECONDS = 0.064
 /** 小于这个高度变化不算「增长」：scrollHeight 取整会带来 ±1px 的假增长。 */
 export const GROWTH_EPSILON = 1.5
 
+/** 余量自身的最大变化速度（px/s）：它直接推动目标位置，不能突变。 */
+export const MARGIN_MAX_SPEED = 600
+
 /** 建一个静止状态。 */
-export function createFollowState (at: number, height = 0, space = 0): FollowState {
-  // growthAt 用 -Infinity 初始化：还没看到过增长就不该「活跃」，否则打开会话
-  // 就会先白留一段底部余量再收回去。第一次真实增长会把它改成一个有限时刻。
-  return { space, velocity: 0, rate: 0, height, burstMax: 0, at, growthAt: Number.NEGATIVE_INFINITY }
+export function createFollowState (at: number, height = 0, position = 0): FollowState {
+  return {
+    position,
+    margin: 0,
+    rate: 0,
+    ratePeak: 0,
+    height,
+    at,
+    growthAt: Number.NEGATIVE_INFINITY,
+  }
 }
 
 export interface FollowStepInput {
-  /** 内容高度（**不含**尾部占位）。 */
+  /** 内容高度（不含任何占位）。 */
   height: number
   viewport: number
   at: number
@@ -82,12 +88,14 @@ export interface FollowStepInput {
 
 export interface FollowStepResult {
   state: FollowState
-  /** 这一帧该写进尾部占位的高度（px）。 */
-  space: number
-  /** 这一帧该写回的 scrollTop（已经包含占位）。 */
-  scrollTop: number
-  /** 平滑后的生成速度（px/s），调试用。 */
-  pace: number
+  /** 这一帧该写回的 scrollTop。 */
+  position: number
+  /** 目标位置（内容底部再往上让出余量）。 */
+  target: number
+  /** 当前底部余量。 */
+  margin: number
+  /** 估算出的生成速度（px/s），调试用。 */
+  rate: number
   /** 已经收敛：可以停掉 rAF。 */
   idle: boolean
 }
@@ -100,58 +108,49 @@ function clamp (value: number, low: number, high: number): number {
  * 推进一帧。
  * @param state - 上一帧状态。
  * @param input - 内容高度、视口高度、时刻与参数。
- * @returns 新状态、该写入的占位高度与 scrollTop。
+ * @returns 新状态与本帧该写入的 scrollTop。
  */
 export function stepFollow (state: FollowState, input: FollowStepInput): FollowStepResult {
   const { height, viewport, at, config } = input
   const dt = clamp((at - state.at) / 1000, 0, MAX_FRAME_SECONDS)
   const tau = Math.max(config.speedTau, 0.05)
-  const maxSpace = Math.max(0, config.maxSpaceRatio * viewport)
 
-  // 1) 估速（短窗口，跟得上批次）+ 最近单批高度（决定一次能吸收多少）
-  //
-  // scrollHeight 是取整的，占位又是小数像素，直接相减会一直抖出 ±1px 的假增长；
-  // 不设这个死区的话「成长中」永远不会过期，余量就永远收不回去。
+  // 1) 估速：短窗口低通，用来决定余量和速度上限
   const raw = height - state.height
   const delta = raw >= GROWTH_EPSILON ? raw : 0
   const instant = dt > 0 ? delta / dt : 0
   const smooth = dt > 0 ? 1 - Math.exp(-dt / tau) : 0
   const rate = Math.max(0, state.rate + (instant - state.rate) * smooth)
-  const burstMax = Math.max(delta, state.burstMax - config.burstDecay * dt)
-  const grew = delta > 0.5
+
+  const grew = delta > 0
   const growthAt = grew ? at : state.growthAt
   const active = grew || at - growthAt < config.holdMs
 
-  // 2) 目标余量：速度与单批高度取大者
-  const pace = clamp(rate, config.paceMin, config.paceMax)
-  const desired = active
-    ? clamp(Math.max(config.minSpace, burstMax * config.burstFactor, pace * config.lead), 0, maxSpace)
-    : 0
+  // 2) 余量：按「峰值速度」预开（慢衰减），并且限定它自己的变化速率——
+  //    余量一变目标位置就跟着变，余量抖就等于画面上下来回抖。
+  const maxMargin = Math.max(0, config.maxMarginRatio * viewport)
+  const ratePeak = Math.max(rate, state.ratePeak * Math.exp(-dt / 2))
+  const marginTarget = active ? clamp(Math.max(config.minMargin, ratePeak * config.lead), 0, maxMargin) : 0
+  const marginSlew = clamp(marginTarget - state.margin, -MARGIN_MAX_SPEED * dt, MARGIN_MAX_SPEED * dt)
+  const margin = clamp(state.margin + marginSlew, 0, maxMargin)
 
-  // 3) 前馈（跟上内容）+ 反馈（把余量拉回目标）；速度变化率受限
-  const cap = Math.max(config.paceMin, pace) * config.velocityCap
-  const target = clamp(rate + (desired - state.space) * config.gain, -cap, cap)
-  const velocity = clamp(
-    state.velocity + clamp(target - state.velocity, -config.accel * dt, config.accel * dt),
-    -cap,
-    cap,
-  )
+  // 3) 目标与限速跟随
+  const bottom = Math.max(0, height - viewport)
+  const target = Math.max(0, bottom - margin)
+  const distance = target - state.position
+  const speed = Math.min(config.maxSpeed, config.speed + Math.abs(distance) * config.gain)
+  const step = clamp(distance, -speed * dt, speed * dt)
+  const position = clamp(state.position + step, 0, bottom)
 
-  // 4) 占位演化：内容增长吃掉它，速度补回它；夹在 [0, 上限]
-  let space = clamp(state.space + velocity * dt - delta, 0, maxSpace)
-  if (space < 0.5 && desired < 0.5) space = 0
-
-  const scrollTop = Math.max(0, height + space - viewport)
-  const idle = Math.abs(desired - space) < 0.6 && Math.abs(velocity) < 24 && space < 0.5
-
+  const idle = Math.abs(target - position) < 0.5 && margin < 0.5
   const nextState: FollowState = {
-    space,
-    velocity: idle ? 0 : velocity,
+    position: idle ? target : position,
+    margin,
     rate: idle ? 0 : rate,
-    height: delta > 0 ? height : state.height,
-    burstMax,
+    ratePeak: idle ? 0 : ratePeak,
+    height,
     at,
     growthAt,
   }
-  return { state: nextState, space, scrollTop, pace, idle }
+  return { state: nextState, position: nextState.position, target, margin, rate, idle }
 }

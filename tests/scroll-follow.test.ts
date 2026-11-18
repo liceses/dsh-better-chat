@@ -1,4 +1,12 @@
-/** 动态底部余量 + 限速弹簧：纯函数，不依赖浏览器帧率。 */
+/**
+ * 跟随核心算法的离线验证。
+ *
+ * 这里不测「UI 有没有装上」，而是直接按 60fps 跑算法，检查观众能看到的东西：
+ * 每帧位移、方向反转、底部余量、以及停下之后有没有真正落到底。
+ *
+ * 所有断言都来自同一个结论：**位置是独立状态、速度有上限**，
+ * 所以一帧最多走 maxSpeed × dt，与宿主一次投喂多少像素无关。
+ */
 
 import { describe, expect, it } from 'vitest'
 import {
@@ -6,137 +14,133 @@ import {
   createFollowState,
   stepFollow,
   type FollowConfig,
-  type FollowState,
   type FollowStepResult,
 } from '../src/client/chat-a2ui/scroll-follow'
 import { MOTION } from '../src/client/chat-a2ui/motion-config'
 
-const config: FollowConfig = MOTION.scroll
+const VIEWPORT = 505
+const FRAME = 1000 / 60
+const config: FollowConfig = MOTION.scroll as FollowConfig
 
-/** 按 16ms 一帧推进，内容高度由 heightAt(frame) 给出。 */
-function run (options: {
+interface Metrics {
+  maxMove: number
+  p95Move: number
+  marginMinWhileActive: number
+  finalGap: number
+  directionFlips: number
   frames: number
-  viewport: number
-  heightAt: (frame: number) => number
-  from?: number
-  state?: FollowState
-}): FollowStepResult {
-  const { frames, viewport, heightAt, from = 0 } = options
-  let state = options.state ?? createFollowState(from, heightAt(0), 0)
-  let result: FollowStepResult = { state, space: 0, scrollTop: 0, pace: 0, idle: false }
-  for (let frame = 1; frame <= frames; frame += 1) {
-    result = stepFollow(state, { height: heightAt(frame), viewport, at: from + frame * 16, config })
-    state = result.state
-  }
-  return result
 }
 
-describe('动态底部余量', () => {
-  it('静止时不留余量，停在真正的底部', () => {
-    const result = run({ frames: 240, viewport: 500, heightAt: () => 2000 })
-    expect(result.space).toBe(0)
-    expect(result.scrollTop).toBeCloseTo(1500, 0)
-    expect(result.idle).toBe(true)
-  })
+/**
+ * 按固定帧率把算法跑一遍。
+ * @param batches - 第 n 次投喂的像素高度（0 表示这一拍没有新内容）。
+ * @param intervalMs - 投喂间隔。
+ */
+function simulate (batches: number[], intervalMs: number): Metrics {
+  const initialHeight = 4000
+  let state = createFollowState(0, initialHeight, initialHeight - VIEWPORT)
+  let height = initialHeight
+  let index = 0
+  let previous = state.position
+  let lastSign = 0
+  let flips = 0
+  const moves: number[] = []
+  const marginsWhileActive: number[] = []
+  const totalMs = intervalMs * batches.length + 8000
+  let frames = 0
 
-  it('持续生成时余量能张开到上限，并把大批到达吃掉', () => {
-    let at = 0
-    let state = createFollowState(0, 2000, 0)
-    let last: FollowStepResult = { state, space: 0, scrollTop: 2000 - 500, pace: 0, idle: false }
-    for (let frame = 1; frame <= 150; frame += 1) {
-      at = frame * 16
-      last = stepFollow(state, { height: 2000 + frame * 40, viewport: 500, at, config })
-      state = last.state
+  for (let at = FRAME; at <= totalMs; at += FRAME) {
+    while (index < batches.length && at >= index * intervalMs) {
+      height += batches[index] as number
+      index += 1
     }
-    // 稳态应该接近「视口比例上限」而不是 0
-    expect(last.space).toBeGreaterThan(config.minSpace)
-    expect(last.space).toBeGreaterThan(config.maxSpaceRatio * 500 * 0.9)
+    const result: FollowStepResult = stepFollow(state, { height, viewport: VIEWPORT, at, config })
+    state = result.state
+    frames += 1
+    const move = result.position - previous
+    previous = result.position
+    if (Math.abs(move) >= 0.5) moves.push(Math.abs(move))
+    const sign = Math.sign(move)
+    if (sign !== 0 && lastSign !== 0 && sign !== lastSign) flips += 1
+    if (sign !== 0) lastSign = sign
+    // 只看「正在投喂」的区间：投喂结束后余量本来就该收回 0，不该算进来
+    const feedingEnds = intervalMs * batches.length
+    if (at > 500 && at <= feedingEnds) marginsWhileActive.push(result.margin)
+  }
 
-    // 对照组：一帧涨 40
-    const control = stepFollow(state, { height: last.state.height + 40, viewport: 500, at: at + 16, config })
-    // 实验组：一帧涨 500（宿主一次提交半屏）
-    const burst = stepFollow(state, { height: last.state.height + 500, viewport: 500, at: at + 16, config })
-    const controlStep = control.scrollTop - last.scrollTop
-    const burstStep = burst.scrollTop - last.scrollTop
-    expect(burst.space).toBeLessThan(control.space)
-    // 余量先被吃掉，所以画面位移远小于 500
-    expect(burstStep).toBeLessThan(500 - last.space + 60)
-    expect(burstStep).toBeGreaterThan(controlStep)
+  const sorted = [...moves].sort((a, b) => a - b)
+  return {
+    maxMove: sorted[sorted.length - 1] ?? 0,
+    p95Move: sorted[Math.floor(sorted.length * 0.95)] ?? 0,
+    marginMinWhileActive: marginsWhileActive.length === 0 ? 0 : Math.min(...marginsWhileActive),
+    finalGap: Math.max(0, height - previous - VIEWPORT),
+    directionFlips: flips,
+    frames,
+  }
+}
+
+/** 每帧匀速增长（token 级投喂）。 */
+const tokenLevel = Array.from({ length: 400 }, () => 20)
+
+const feedPatterns: Array<{ name: string; batches: number[]; interval: number }> = [
+  { name: 'token 级（每帧 20px）', batches: tokenLevel, interval: FRAME },
+  { name: '60px / 100ms', batches: Array(80).fill(60), interval: 100 },
+  { name: '135px / 500ms', batches: Array(30).fill(135), interval: 500 },
+  { name: '250px / 1s', batches: Array(20).fill(250), interval: 1000 },
+  { name: '500px / 2s', batches: Array(10).fill(500), interval: 2000 },
+  { name: '900px / 3s（整段）', batches: Array(6).fill(900), interval: 3000 },
+  { name: '停顿后 400px', batches: [400, 400, 0, 0, 400, 400, 0, 0, 400], interval: 3000 },
+]
+
+describe('跟随核心：速度上限、余量、收敛', () => {
+  it('任何投喂模式下，单帧位移都不超过 maxSpeed × dt', () => {
+    const limit = config.maxSpeed * (FRAME / 1000) + 1
+    for (const pattern of feedPatterns) {
+      const metrics = simulate(pattern.batches, pattern.interval)
+      expect(metrics.maxMove, pattern.name).toBeLessThanOrEqual(limit)
+    }
   })
 
-  it('余量回涨有速度上限（pace × velocityCap）', () => {
-    let state = createFollowState(0, 2000, 0)
-    let at = 0
-    let last: FollowStepResult = { state, space: 0, scrollTop: 0, pace: 0, idle: false }
+  it('900px 整段到达也只是滑行，不是一帧跳过去', () => {
+    const metrics = simulate(Array(6).fill(900), 3000)
+    expect(metrics.maxMove).toBeLessThanOrEqual(config.maxSpeed * (FRAME / 1000) + 1)
+    expect(metrics.maxMove).toBeLessThan(60)
+  })
+
+  it('方向基本单调：不会上下来回抖', () => {
+    for (const pattern of feedPatterns) {
+      const metrics = simulate(pattern.batches, pattern.interval)
+      expect(metrics.directionFlips, pattern.name).toBeLessThanOrEqual(8)
+    }
+  })
+
+  it('生成期间底部余量保持打开（低于最低余量的比例很少）', () => {
+    const metrics = simulate(Array(20).fill(250), 1000)
+    expect(metrics.marginMinWhileActive).toBeGreaterThan(config.minMargin * 0.6)
+  })
+
+  it('停下来之后落回真正的底部', () => {
+    for (const pattern of feedPatterns) {
+      const metrics = simulate(pattern.batches, pattern.interval)
+      expect(metrics.finalGap, pattern.name).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('内容比视口短时位置恒为 0', () => {
+    let state = createFollowState(0, 300, 0)
     for (let frame = 1; frame <= 120; frame += 1) {
-      at = frame * 16
-      last = stepFollow(state, { height: 2000 + frame * 40, viewport: 500, at, config })
-      state = last.state
-    }
-    // 制造 120px 的赤字，再回涨 10 帧（160ms）
-    const squeezed = { ...state, space: Math.max(0, state.space - 120) }
-    const cap = config.paceMax * config.velocityCap
-    let before = squeezed.space
-    let current = squeezed
-    for (let frame = 1; frame <= 10; frame += 1) {
-      const result = stepFollow(current, { height: current.height, viewport: 500, at: at + frame * 16, config })
-      const perSecond = (result.space - before) / 0.016
-      expect(perSecond).toBeLessThanOrEqual(cap + 1)
-      before = result.space
-      current = result.state
-    }
-    expect(current.space).toBeGreaterThan(squeezed.space)
-  })
-
-  it('scrollTop 恒等于「内容高度 + 余量 - 视口」且不为负', () => {
-    let state = createFollowState(0, 800, 0)
-    let at = 0
-    for (let frame = 1; frame <= 200; frame += 1) {
-      at = frame * 16
-      const height = 800 + frame * 25
-      const result = stepFollow(state, { height, viewport: 500, at, config })
-      expect(result.scrollTop).toBeCloseTo(Math.max(0, height + result.space - 500), 6)
-      expect(result.scrollTop).toBeGreaterThanOrEqual(0)
+      const result = stepFollow(state, { height: 300, viewport: VIEWPORT, at: frame * FRAME, config })
+      expect(result.position).toBe(0)
       state = result.state
     }
-  })
-
-  it('停止生成后余量收回 0（回到真底部）', () => {
-    let at = 0
-    let state = createFollowState(0, 2000, 0)
-    for (let frame = 1; frame <= 120; frame += 1) {
-      at = frame * 16
-      state = stepFollow(state, { height: 2000 + frame * 40, viewport: 500, at, config }).state
-    }
-    expect(state.space).toBeGreaterThan(0)
-    let last: FollowStepResult = { state, space: state.space, scrollTop: 0, pace: 0, idle: false }
-    for (let frame = 1; frame <= 500; frame += 1) {
-      last = stepFollow(last.state, { height: 6800, viewport: 500, at: at + frame * 16, config })
-    }
-    expect(last.space).toBeLessThan(0.5)
-    expect(last.scrollTop).toBeCloseTo(6800 - 500, 0)
-    expect(last.idle).toBe(true)
   })
 
   it('一次超长帧只按 64ms 推进', () => {
     const now = 10_000
-    const fresh = { ...createFollowState(0, 3000, 0), at: now - MAX_FRAME_SECONDS * 1000, growthAt: now - 100 }
-    const stalled = { ...createFollowState(0, 3000, 0), at: now - 5000, growthAt: now - 100 }
-    const a = stepFollow(fresh, { height: 3000, viewport: 500, at: now, config })
-    const b = stepFollow(stalled, { height: 3000, viewport: 500, at: now, config })
-    expect(b.space).toBeCloseTo(a.space, 6)
-    expect(b.scrollTop).toBeCloseTo(a.scrollTop, 6)
-  })
-
-  it('余量永不超过视口比例上限', () => {
-    let state = createFollowState(0, 1000, 0)
-    let at = 0
-    for (let frame = 1; frame <= 200; frame += 1) {
-      at = frame * 16
-      const height = 1000 + frame * 90
-      const result = stepFollow(state, { height, viewport: 500, at, config })
-      expect(result.space).toBeLessThanOrEqual(config.maxSpaceRatio * 500 + 0.001)
-      state = result.state
-    }
+    const fresh = { ...createFollowState(0, 3000, 0), at: now - MAX_FRAME_SECONDS * 1000 }
+    const stalled = { ...createFollowState(0, 3000, 0), at: now - 5000 }
+    const a = stepFollow(fresh, { height: 3000, viewport: VIEWPORT, at: now, config })
+    const b = stepFollow(stalled, { height: 3000, viewport: VIEWPORT, at: now, config })
+    expect(b.position).toBeCloseTo(a.position, 6)
   })
 })
