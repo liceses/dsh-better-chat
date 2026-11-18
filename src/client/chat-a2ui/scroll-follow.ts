@@ -67,7 +67,9 @@ export const GROWTH_EPSILON = 1.5
 
 /** 建一个静止状态。 */
 export function createFollowState (at: number, height = 0, space = 0): FollowState {
-  return { space, velocity: 0, rate: 0, height, burstMax: 0, at, growthAt: at }
+  // growthAt 用 -Infinity 初始化：还没看到过增长就不该「活跃」，否则打开会话
+  // 就会先白留一段底部余量再收回去。第一次真实增长会把它改成一个有限时刻。
+  return { space, velocity: 0, rate: 0, height, burstMax: 0, at, growthAt: Number.NEGATIVE_INFINITY }
 }
 
 export interface FollowStepInput {

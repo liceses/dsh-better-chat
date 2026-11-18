@@ -77,7 +77,7 @@
     "gain": 5,
     "accel": 9000,
     "speedTau": 0.35,
-    "holdMs": 900,
+    "holdMs": 3200,
     "instantAbove": 1600
   },
   "stream": {

@@ -124,7 +124,7 @@ export const DEFAULT_MOTION: MotionConfig = {
     gain: 5,
     accel: 9000,
     speedTau: 0.35,
-    holdMs: 900,
+    holdMs: 3200,
     instantAbove: 1600,
   },
   stream: { blur: 9, duration: 0.42, stagger: 0.004, maxChars: 140, clipSpeed: 1000, clipMin: 0.12, clipMax: 0.95 },
