@@ -190,8 +190,8 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
         userScrollAtRef.current = Date.now()
         if (delta < -2 && sticking) {
           cancelTween()
-          applySpace(0)
           setStick(false)
+          settle()
           return
         }
       }
@@ -199,7 +199,14 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       const state = followRef.current ?? createFollowState(at, contentHeight, applied)
       const result = stepFollow(state, { height: contentHeight, viewport, at, config: MOTION.scroll })
       followRef.current = result.state
-      applySpace(result.space)
+      let nextSpace = result.space
+      if (!sticking) {
+        // 不跟随时只负责把占位收回去；但收缩量不能超过「当前位置到真底部」的
+        // 距离，否则浏览器会把 scrollTop 夹一下——那就是一次可见的跳动。
+        const gap = Math.max(0, element.scrollHeight - element.scrollTop - element.clientHeight)
+        nextSpace = Math.min(nextSpace, gap)
+      }
+      applySpace(nextSpace)
       const before = element.scrollTop
       if (sticking) {
         // 每帧都写、每帧都记：这样 writtenRef 永远是「我们最后一次摆的位置」，
@@ -291,22 +298,24 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       // 距离要按真正滚动的那一层算。余量现在是**布局里的占位**而不是滚动偏移，
       // 所以这里不用扣：贴底时距离本来就是 0。
       const distance = owner.scrollHeight - currentTop - owner.clientHeight
-      if (distance <= STICK_THRESHOLD) {
+      // 只有「用户自己往下滚回底部」才重新吸附。我们清占位时浏览器会夹一次
+      // scrollTop，那会让距离瞬间变 0；如果按距离吸附，就会立刻又被拉到底部，
+      // 用户看到的就是「滚一下、被弹回去」。
+      if (distance <= STICK_THRESHOLD && delta > 2) {
         programmaticUntilRef.current = 0
         setStick(true)
         if (!wasSticking) settle()
         return
       }
+      if (distance <= STICK_THRESHOLD) return
       if (Date.now() < programmaticUntilRef.current) return
       // 只有 scrollTop 真的减少才算用户上滚。流式内容变高时，浏览器滚动锚定
       // 会把 scrollTop 往下推（delta > 0），那不是用户意图，不能停止跟随。
       if (delta < -2) {
         programmaticUntilRef.current = 0
         cancelTween()
-        // 停止跟随时把占位收掉：否则它会一直留在末尾，内容凭空比底部高出一截。
-        // 占位在内容之后，收掉它不影响用户正在看的那一段。
-        applySpace(0)
         setStick(false)
+        settle()
       }
     }
 
@@ -320,16 +329,17 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       if (stickRef.current === false) return
       programmaticUntilRef.current = Date.now() + 200
       cancelTween()
-      applySpace(0)
       setStick(false)
+      // 循环还要跑：不跟随时它只负责把占位收回，不碰滚动位置。
+      settle()
     }
     const onTouchStart = (): void => {
       probeLog('unstick', { by: 'touch' })
       if (stickRef.current === false) return
       programmaticUntilRef.current = Date.now() + 200
       cancelTween()
-      applySpace(0)
       setStick(false)
+      settle()
     }
     owner.addEventListener('wheel', onWheel, { passive: true })
     owner.addEventListener('touchstart', onTouchStart, { passive: true })
