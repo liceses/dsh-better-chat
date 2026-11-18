@@ -1,16 +1,21 @@
 /**
- * 贴底滚动。
+ * 贴底滚动（预开余量 + 弹簧）。
  *
- * 聊天流的通用需求：新消息或流式 token 到达时，如果用户本来就在底部，
- * 就继续跟到底；用户一旦往上滚就停止跟随，滚回底部 40px 以内再恢复。
- * 用 MutationObserver（文本与子节点变化）+ ResizeObserver（尺寸变化）双保险，
- * 并用 requestAnimationFrame 合并同一帧内的多次触发。
+ * 不再是「贴到最底部再被顶上去」，而是：
+ * - 用生成速度算出底部该留多少余量（`scroll.lead × 速度`，上限 `headroomMax`），
+ *   新内容落地时离下沿还有一截，读者不会一直追着屏幕边缘；
+ * - 余量在生成期间只涨不缩，最后一句话结束后才慢慢收回；
+ * - 位置用弹簧积分推进，有速度有阻尼，观感是「滑」而不是「跳」。
+ *
+ * 仍然尊重用户：一旦往上滚就停止跟随，滚回目标 40px 以内再恢复。
+ * 用 MutationObserver（文本/子节点）+ ResizeObserver（尺寸）+ revision 三路触发，
+ * 但只有一条 rAF 循环在推进。
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { cls } from './classes'
 import { MOTION } from './motion-config'
-import { stepScroll } from './scroll-follow'
+import { createFollowState, stepFollow, type FollowState } from './scroll-follow'
 import { cx } from './util'
 import { reducedMotion } from './motion'
 
@@ -61,8 +66,12 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   const frameRef = useRef<number | null>(null)
   /** 程序化平滑滚动的时间窗，窗口内的位移不算「用户上滚」。 */
   const programmaticUntilRef = useRef(0)
-  /** 贴底补间的帧句柄。 */
+  /** 跟随循环的帧句柄。 */
   const tweenRef = useRef<number | null>(null)
+  /** 弹簧状态（位置 / 速度 / 余量）。 */
+  const followRef = useRef<FollowState | null>(null)
+  /** 上一次由程序写进去的 scrollTop：用来区分「我们的位移」和「用户上滚」。 */
+  const writtenRef = useRef(-1)
   /** 挂载后第一次贴底直接落位（打开会话不要从顶部一路滑下来），之后都走补间。 */
   const primedRef = useRef(false)
   /** 上一次 scroll 事件的位置，用来区分用户上滚和内容增长引起的滚动锚定。 */
@@ -82,6 +91,8 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
     const top = element.scrollHeight
     if (behavior === 'auto' || typeof element.scrollTo !== 'function') {
       element.scrollTop = top
+      writtenRef.current = element.scrollTop
+      followRef.current = null
       return
     }
     try {
@@ -102,59 +113,52 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   }, [follow])
 
   const cancelTween = useCallback(() => {
-    if (tweenRef.current === null) return
-    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(tweenRef.current)
+    if (tweenRef.current !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(tweenRef.current)
+    }
     tweenRef.current = null
+    followRef.current = null
   }, [])
 
   /**
-   * 贴底的限速跟随：每帧按「当前距离 + 帧间隔」前进，而不是走一条固定时长的曲线。
+   * 推进跟随：一条 rAF 循环，每帧把弹簧往「内容底部 - 余量」推。
    *
-   * 关键区别：这里**不持有 from/end 快照**。补间途中再来一批新内容时只是让
-   * distance 变大，位置连续；固定时长曲线则会因为端点被换掉而整段跳一下。
+   * 不持有 from/end 快照，也不按固定时长走曲线：新内容到达只是改变目标，
+   * 位置与速度是连续的，所以观感是持续滑动而不是一段段跳。
    */
   const settle = useCallback(function step (): void {
     if (!stickRef.current) return
-    // 已经有一条跟随在跑就让它继续（每一步都重读 scrollHeight），
-    // 否则 MutationObserver 和 revision 各起一条链，速度翻倍。
     if (tweenRef.current !== null) return
     const base = containerRef.current
     const element = base === null ? null : resolveOwner(base, forceInner)
     if (element === null) return
 
-    const target = element.scrollHeight - element.clientHeight
-    const distance = target - element.scrollTop
-    if (distance <= 1) {
-      element.scrollTop = target
-      return
-    }
-    // 跨度太大（切会话、恢复滚动位置）就落位，别慢慢滑半屏。
-    if (distance > MOTION.scroll.instantAbove) {
-      element.scrollTop = target
-      return
-    }
-
     const now = (): number => (typeof performance === 'object' ? performance.now() : Date.now())
-    let lastAt = now()
 
     const tick = (): void => {
       tweenRef.current = null
       if (!stickRef.current) return
       const at = now()
-      const dtMs = at - lastAt
-      lastAt = at
-      const end = element.scrollHeight - element.clientHeight
-      const remaining = end - element.scrollTop
-      if (remaining <= 0.5) {
-        element.scrollTop = end
+      const height = element.scrollHeight
+      const viewport = element.clientHeight
+      const bottom = Math.max(0, height - viewport)
+
+      // 跨度太大（切会话、恢复滚动位置）：直接落位，别慢慢滑半屏。
+      if (bottom - element.scrollTop > MOTION.scroll.instantAbove) {
+        element.scrollTop = bottom
+        writtenRef.current = element.scrollTop
+        followRef.current = createFollowState(element.scrollTop, at, height)
         return
       }
-      const advance = stepScroll({ distance: remaining, dtMs, config: MOTION.scroll })
-      if (advance <= 0) {
-        tweenRef.current = requestAnimationFrame(tick)
-        return
+
+      const state = followRef.current ?? createFollowState(element.scrollTop, at, height)
+      const result = stepFollow(state, { height, viewport, at, config: MOTION.scroll })
+      followRef.current = result.state
+      if (Math.abs(result.scrollTop - element.scrollTop) >= 0.5) {
+        element.scrollTop = result.scrollTop
+        writtenRef.current = element.scrollTop
       }
-      element.scrollTop = Math.min(element.scrollTop + advance, end)
+      if (result.idle) return
       tweenRef.current = requestAnimationFrame(tick)
     }
     tweenRef.current = requestAnimationFrame(tick)
@@ -197,14 +201,21 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
     }
 
     const onScroll = () => {
-      // 距离要按真正滚动的那一层算：宿主外层滚动时 container 自己是不滚的。
-      const distance = owner.scrollHeight - owner.scrollTop - owner.clientHeight
       const currentTop = owner.scrollTop
       const delta = currentTop - lastTopRef.current
       lastTopRef.current = currentTop
+      // 自己写进去的位移不算用户操作：弹簧会有来回，不能把自己当成上滚。
+      if (writtenRef.current >= 0 && Math.abs(currentTop - writtenRef.current) < 2) return
+
+      const wasSticking = stickRef.current
+      // 距离要按真正滚动的那一层算，并且扣掉「预开的余量」——
+      // 否则余量本身会被当成「用户离开了底部」，跟随会自己关掉。
+      const headroom = followRef.current?.headroom ?? 0
+      const distance = owner.scrollHeight - currentTop - owner.clientHeight - headroom
       if (distance <= STICK_THRESHOLD) {
         programmaticUntilRef.current = 0
         setStick(true)
+        if (!wasSticking) settle()
         return
       }
       if (Date.now() < programmaticUntilRef.current) return

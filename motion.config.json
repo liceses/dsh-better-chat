@@ -66,9 +66,14 @@
     "rotateYDistance": 10
   },
   "scroll": {
-    "speed": 550,
-    "gain": 1.2,
-    "maxSpeed": 1400,
+    "lead": 0.28,
+    "headroomMax": 180,
+    "speedTau": 0.25,
+    "holdMs": 1200,
+    "releaseTau": 0.8,
+    "stiffness": 120,
+    "damping": 18,
+    "mass": 1,
     "instantAbove": 1600
   },
   "stream": {
