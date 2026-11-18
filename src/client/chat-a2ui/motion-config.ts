@@ -48,9 +48,18 @@ export interface MotionConfig {
     rotateYDistance: number
   }
   /** 贴底跟随：补间基准时长、最长时长、超过多少像素就直接落位（切会话那种跨度）。 */
-  scroll: { duration: number; maxDuration: number; instantAbove: number }
+  scroll: { speed: number; gain: number; maxSpeed: number; instantAbove: number }
   /** 流式尾巴的模糊渐入：模糊半径、单字时长、相邻字错开、每帧最多处理多少字。 */
-  stream: { blur: number; duration: number; stagger: number; maxChars: number; clipDuration: number }
+  stream: {
+    blur: number
+    duration: number
+    stagger: number
+    maxChars: number
+    /** 流式块的「高度补充」速度（px/s）与时长上下限。 */
+    clipSpeed: number
+    clipMin: number
+    clipMax: number
+  }
   scramble: { duration: number; speed: number }
   borderTrail: { size: number; duration: number }
   progressiveBlur: { blurLayers: number; blurIntensity: number }
@@ -82,8 +91,8 @@ export const DEFAULT_MOTION: MotionConfig = {
     scaleDistance: 1.1,
     rotateYDistance: 10,
   },
-  scroll: { duration: 0.34, maxDuration: 0.62, instantAbove: 1600 },
-  stream: { blur: 9, duration: 0.42, stagger: 0.004, maxChars: 140, clipDuration: 0.24 },
+  scroll: { speed: 550, gain: 1.2, maxSpeed: 1400, instantAbove: 1600 },
+  stream: { blur: 9, duration: 0.42, stagger: 0.004, maxChars: 140, clipSpeed: 1000, clipMin: 0.12, clipMax: 0.95 },
   scramble: { duration: 0.8, speed: 0.04 },
   borderTrail: { size: 110, duration: 3.4 },
   progressiveBlur: { blurLayers: 6, blurIntensity: 0.32 },
@@ -143,14 +152,17 @@ num('shimmer.xDistance', -30, 30)
 num('shimmer.yDistance', -30, 30)
 num('shimmer.scaleDistance', 0.2, 2)
 num('shimmer.rotateYDistance', -90, 90)
-num('scroll.duration', 0.05, 2)
-num('scroll.maxDuration', 0.1, 4)
+num('scroll.speed', 50, 6000)
+num('scroll.gain', 0, 12)
+num('scroll.maxSpeed', 100, 12000)
 num('scroll.instantAbove', 200, 20000)
 num('stream.blur', 0, 24)
 num('stream.duration', 0.05, 2)
 num('stream.stagger', 0, 0.2)
 num('stream.maxChars', 1, 240, true)
-num('stream.clipDuration', 0.05, 2)
+num('stream.clipSpeed', 100, 8000)
+num('stream.clipMin', 0.02, 1)
+num('stream.clipMax', 0.05, 3)
 num('scramble.duration', 0, 5)
 num('scramble.speed', 0.005, 0.5)
 num('borderTrail.size', 8, 400)
@@ -160,6 +172,22 @@ num('progressiveBlur.blurIntensity', 0, 2)
 
 /** 全部可调叶子路径（调试台按它生成控件，测试按它核对覆盖）。 */
 export const MOTION_PATHS: readonly string[] = Object.keys(RULES)
+
+/**
+ * 一次高度变化该用多久补间。
+ *
+ * 用「速度」而不是固定时长：30px 的变化 0.12s 就够（几乎即时），
+ * 500px 的变化自然摊到 0.5s，两者观感一致；再大也不超过 clipMax，
+ * 免得刚打开会话时整屏慢慢滑。
+ * @param delta - 本次高度变化了多少像素。
+ * @returns 秒。
+ */
+export function clipSeconds (delta: number): number {
+  const { clipSpeed, clipMin, clipMax } = MOTION.stream
+  const bounded = Math.abs(delta)
+  if (!(bounded > 0)) return clipMin
+  return Math.min(clipMax, Math.max(clipMin, bounded / clipSpeed))
+}
 
 /** 每条路径的区间 / 枚举，调试台直接复用，避免控件和校验两套口径。 */
 export const MOTION_RULES: Readonly<Record<string, Rule>> = RULES

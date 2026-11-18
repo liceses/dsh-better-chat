@@ -385,13 +385,14 @@ export const CHAT_CSS = `
 }
 
 /* 流式块的高度补间：新内容整块到达时，先停住高度再长到目标，
-   让文字从下边缘一行行长出来。时长来自 stream.clipDuration。 */
+   让文字从下边缘一行行长出来。时长按距离算，由 Markdown 内联给出（transitionDuration）。 */
 .caui-md-clip {
   overflow: hidden;
 }
 
 .caui-md-clip-animated {
-  transition: height var(--caui-clip-duration, 0.24s) cubic-bezier(0.22, 1, 0.36, 1);
+  transition-property: height;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* 流式尾巴：逐字模糊渐入。时长与模糊半径来自 motion.config.json 的 stream.*，

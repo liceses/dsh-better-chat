@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { cls } from './classes'
 import { MOTION } from './motion-config'
+import { stepScroll } from './scroll-follow'
 import { cx } from './util'
 import { reducedMotion } from './motion'
 
@@ -107,15 +108,14 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   }, [])
 
   /**
-   * 贴底的平滑版：分几帧挪到目标位置，而不是一次 scrollTop = scrollHeight。
+   * 贴底的限速跟随：每帧按「当前距离 + 帧间隔」前进，而不是走一条固定时长的曲线。
    *
-   * 宿主把助手正文按整段提交，一段常常三四百像素高；一次落位就是肉眼可见的
-   * 整屏跳跃。这里每帧最多走 remaining*0.35（12~220px），大跨度（切换会话、
-   * 重新贴底）仍然直接落位，免得慢慢滑半屏。
+   * 关键区别：这里**不持有 from/end 快照**。补间途中再来一批新内容时只是让
+   * distance 变大，位置连续；固定时长曲线则会因为端点被换掉而整段跳一下。
    */
   const settle = useCallback(function step (): void {
     if (!stickRef.current) return
-    // 已经有一条补间在跑就让它继续（每一步都会重新读 scrollHeight），
+    // 已经有一条跟随在跑就让它继续（每一步都重读 scrollHeight），
     // 否则 MutationObserver 和 revision 各起一条链，速度翻倍。
     if (tweenRef.current !== null) return
     const base = containerRef.current
@@ -123,8 +123,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
     if (element === null) return
 
     const target = element.scrollHeight - element.clientHeight
-    const from = element.scrollTop
-    const distance = target - from
+    const distance = target - element.scrollTop
     if (distance <= 1) {
       element.scrollTop = target
       return
@@ -135,28 +134,28 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       return
     }
 
-    // 时长跟距离挂钩、按真实时间推进：帧率高低不影响「多久滑完」，
-    // 大段落（宿主一次能提交近一屏）才会有明确的滑行感。
-    const { duration, maxDuration } = MOTION.scroll
-    const total = Math.min(maxDuration, duration * Math.min(2, Math.max(0.6, distance / 320)))
-    const startedAt = typeof performance === 'object' ? performance.now() : Date.now()
     const now = (): number => (typeof performance === 'object' ? performance.now() : Date.now())
+    let lastAt = now()
 
     const tick = (): void => {
       tweenRef.current = null
       if (!stickRef.current) return
-      const elapsed = now() - startedAt
-      const progress = Math.min(1, elapsed / (total * 1000))
-      const eased = 1 - Math.pow(1 - progress, 3)
+      const at = now()
+      const dtMs = at - lastAt
+      lastAt = at
       const end = element.scrollHeight - element.clientHeight
-      const next = from + (end - from) * eased
-      element.scrollTop = Math.min(next, end)
-      if (progress >= 1 && end - element.scrollTop <= 1) {
+      const remaining = end - element.scrollTop
+      if (remaining <= 0.5) {
         element.scrollTop = end
         return
       }
-      // 进度走完但内容又长了一截，就接着滑（相邻两段补间看起来是连续的）
-      tweenRef.current = requestAnimationFrame(progress >= 1 ? step : tick)
+      const advance = stepScroll({ distance: remaining, dtMs, config: MOTION.scroll })
+      if (advance <= 0) {
+        tweenRef.current = requestAnimationFrame(tick)
+        return
+      }
+      element.scrollTop = Math.min(element.scrollTop + advance, end)
+      tweenRef.current = requestAnimationFrame(tick)
     }
     tweenRef.current = requestAnimationFrame(tick)
   }, [containerRef, forceInner])

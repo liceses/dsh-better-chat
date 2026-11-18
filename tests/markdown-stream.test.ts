@@ -10,7 +10,7 @@ import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 import { Markdown } from '../src/client/chat-a2ui/Markdown'
-import { MOTION } from '../src/client/chat-a2ui/motion-config'
+import { MOTION, clipSeconds } from '../src/client/chat-a2ui/motion-config'
 
 const CHAR_CLASS = '.caui-md-stream-char'
 
@@ -96,6 +96,8 @@ describe('流式尾巴的模糊渐入', () => {
       expect(clip).not.toBeNull()
       expect(clip?.classList.contains('caui-md-clip-animated')).toBe(true)
       expect(clip?.style.height).toBe('320px')
+      // 首次出现用最短时长：高度没变，不该凭空拖一拍
+      expect(clip?.style.transitionDuration).toBe(MOTION.stream.clipMin + 's')
       expect(clip?.querySelector('.caui-markdown')).not.toBeNull()
     } finally {
       Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, get () { return 0 } })
@@ -108,6 +110,14 @@ describe('流式尾巴的模糊渐入', () => {
     expect(clip).not.toBeNull()
     expect(clip?.classList.contains('caui-md-clip-animated')).toBe(false)
     expect(clip?.style.height).toBe('')
+  })
+
+  it('高度补间时长按距离算：小幅几乎即时、大幅摊到半秒、再大也封顶', () => {
+    expect(clipSeconds(10)).toBe(MOTION.stream.clipMin)
+    expect(clipSeconds(531)).toBeCloseTo(531 / MOTION.stream.clipSpeed, 3)
+    expect(clipSeconds(0)).toBe(MOTION.stream.clipMin)
+    expect(clipSeconds(99999)).toBe(MOTION.stream.clipMax)
+    expect(clipSeconds(531)).toBeGreaterThan(clipSeconds(60))
   })
 
   it('带上 --caui-stream-* 变量，动画参数来自配置', () => {

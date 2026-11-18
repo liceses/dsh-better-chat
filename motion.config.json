@@ -66,8 +66,9 @@
     "rotateYDistance": 10
   },
   "scroll": {
-    "duration": 0.34,
-    "maxDuration": 0.62,
+    "speed": 550,
+    "gain": 1.2,
+    "maxSpeed": 1400,
     "instantAbove": 1600
   },
   "stream": {
@@ -75,7 +76,9 @@
     "duration": 0.42,
     "stagger": 0.004,
     "maxChars": 140,
-    "clipDuration": 0.24
+    "clipSpeed": 1000,
+    "clipMin": 0.12,
+    "clipMax": 0.95
   },
   "scramble": {
     "duration": 0.8,

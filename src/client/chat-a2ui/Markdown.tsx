@@ -9,7 +9,7 @@ import type { CSSProperties } from 'react'
 import { Marked, type RendererObject } from 'marked'
 import DOMPurify from 'dompurify'
 import { cls } from './classes'
-import { MOTION } from './motion-config'
+import { MOTION, clipSeconds } from './motion-config'
 import { reducedMotion } from './motion'
 import { cx } from './util'
 
@@ -273,37 +273,40 @@ export const Markdown = memo(function Markdown ({ text, streaming = false, tail 
   // 高度补间：宿主一次可能提交几百像素的正文（实测单批 +531px），直接铺开就是
   // 整块内容瞬间顶上来。这里让这一块的高度先停住、再在 0.2s 内长到目标高度，
   // 流式里看到的效果就是文字从下边缘一行行长出来，而不是整段跳出来。
-  const [clipHeight, setClipHeight] = useState<number | null>(null)
+  const [clip, setClip] = useState<{ height: number; duration: number } | null>(null)
   const clipRef = useRef<HTMLDivElement | null>(null)
   const clipActive = tail || streaming
 
   useLayoutEffect(() => {
     if (!clipActive || reducedMotion()) {
-      if (clipHeight !== null) setClipHeight(null)
+      if (clip !== null) setClip(null)
       return
     }
     const element = clipRef.current
     if (element === null) return
     const next = Math.round(element.scrollHeight)
     if (next <= 0) return
-    if (clipHeight !== next) setClipHeight(next)
-  }, [html, clipActive, clipHeight])
+    if (clip !== null && clip.height === next) return
+    const previous = clip === null ? next : clip.height
+    // 首次出现用最短时长：高度没变，不该凭空拖一拍。
+    const duration = clip === null ? MOTION.stream.clipMin : clipSeconds(next - previous)
+    setClip({ height: next, duration })
+  }, [html, clipActive, clip])
 
   const style = {
     '--caui-stream-duration': MOTION.stream.duration + 's',
     '--caui-stream-blur': MOTION.stream.blur + 'px',
-    '--caui-clip-duration': MOTION.stream.clipDuration + 's',
   } as CSSProperties
 
-  const clip = clipActive && clipHeight !== null
-    ? { height: clipHeight + 'px' }
-    : undefined
+  const clipStyle = clip === null
+    ? undefined
+    : { height: clip.height + 'px', transitionDuration: clip.duration + 's' }
 
   return (
     <div
       ref={clipRef}
-      className={cx('caui-md-clip', clip !== undefined && 'caui-md-clip-animated')}
-      style={clip}
+      className={cx('caui-md-clip', clip !== null && 'caui-md-clip-animated')}
+      style={clipStyle}
     >
       <div
         ref={hostRef}

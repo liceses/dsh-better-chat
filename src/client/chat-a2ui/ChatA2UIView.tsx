@@ -164,7 +164,9 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
               {keys.map((key) => (
                 <motion.div
                   key={key}
-                  layout={animated}
+                  // 生成中不做 layout 弹簧：那一层会对同一段高度变化再做一次
+                  // scale 修正，和块高度补间叠加，产生二次位移。
+                  layout={animated && !running}
                   initial={animated ? rowEnterStart : false}
                   animate={rowEntered}
                   exit={animated ? rowExitTarget : { opacity: 0 }}
