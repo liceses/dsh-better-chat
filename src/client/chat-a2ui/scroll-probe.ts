@@ -188,9 +188,73 @@ export function probeInstall (): void {
       target.scrollTop = Math.max(0, target.scrollTop - px)
       return 'top ' + Math.round(target.scrollTop)
     },
+    /**
+     * 按「验收标准」检查当前这份日志，返回每条判据的通过情况。
+     * 这是唯一需要看的东西：`__cauiProbe.check()` 一行就能说清过没过。
+     */
+    check: (): string => JSON.stringify(checkEntries(current.entries), null, 1),
   }
   ;(window as unknown as { __cauiProbe: typeof api }).__cauiProbe = api
   probeLog('install', { hash: window.location.hash.slice(0, 40) })
+}
+
+/**
+ * 按验收标准检查一份日志。
+ *
+ * 判据（阈值都写死在这里，和 README 的表格一一对应）：
+ * - move ≤ 44px      单帧可见位移不超过 maxSpeed×dt（60fps）
+ * - settle ≤ 2px     停下来之后贴在底部
+ * - quiet            每次用户上滚之后 500ms 内跟随器没有再写 scrollTop
+ * - restick          重新吸附只发生在「用户自己往下滚」之后
+ * @param entries - 探针日志。
+ */
+export function checkEntries (entries: ProbeEntry[]): {
+  pass: boolean
+  move: { max: number; limit: number; ok: boolean }
+  settle: { gap: number; ok: boolean }
+  quiet: { unstick: number; violated: number; ok: boolean }
+  restick: { resticks: number; suspicious: number; ok: boolean }
+  errors: number
+} {
+  const MOVE_LIMIT = 44
+  const ticks = entries.filter(entry => entry.kind === 'tick')
+  const maxMove = ticks.reduce((max, entry) => Math.max(max, Math.abs(Number(entry.moved ?? 0))), 0)
+  const lastTick = ticks[ticks.length - 1]
+  const gap = lastTick === undefined ? 0 : Math.abs(Number(lastTick.target ?? 0) - Number(lastTick.top ?? 0))
+
+  let violated = 0
+  let unsticks = 0
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]
+    if (entry === undefined || entry.kind !== 'unstick') continue
+    unsticks += 1
+    const window = entries.slice(index + 1, index + 40)
+    const moved = window.some(next => next.kind === 'tick' && Math.abs(Number(next.moved ?? 0)) >= 1)
+    if (moved) violated += 1
+  }
+
+  let resticks = 0
+  let suspicious = 0
+  for (let index = 1; index < entries.length; index += 1) {
+    const entry = entries[index]
+    const previous = entries[index - 1]
+    if (entry === undefined || previous === undefined) continue
+    if (entry.kind !== 'scroll' || previous.kind !== 'scroll') continue
+    if (previous.stick === 0 && entry.stick === 1) {
+      resticks += 1
+      if (Number(entry.delta ?? 0) <= 2) suspicious += 1
+    }
+  }
+
+  const pass = maxMove <= MOVE_LIMIT && gap <= 2 && violated === 0 && suspicious === 0
+  return {
+    pass,
+    move: { max: Math.round(maxMove), limit: MOVE_LIMIT, ok: maxMove <= MOVE_LIMIT },
+    settle: { gap: Math.round(gap), ok: gap <= 2 },
+    quiet: { unstick: unsticks, violated, ok: violated === 0 },
+    restick: { resticks, suspicious, ok: suspicious === 0 },
+    errors: 0,
+  }
 }
 
 /** 找到真正在滚动的那一层（与跟随器同一套判定）。 */
