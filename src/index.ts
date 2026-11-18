@@ -70,6 +70,14 @@ export function apply(ctx: {
         },
       },
       {
+        id: 'chat-web-tools',
+        name: '@deepseek-ai/dsh-tool-web',
+        config: {
+          fetch: true,
+          searchTimeoutMs: 60000,
+        },
+      },
+      {
         id: 'chat-tool-filter',
         name: 'dsh-chat-a2ui/preset/tool-filter',
       },

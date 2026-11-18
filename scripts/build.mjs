@@ -60,4 +60,4 @@ await writeFile(join(out, 'client.js'), wrapped, 'utf8')
 await rm(join(root, '.build'), { recursive: true, force: true })
 
 await cp(join(root, 'src/preset/tool-filter.mjs'), join(out, 'preset/tool-filter.mjs'))
-console.log('[dsh-chat-a2ui] built lib/index.js, lib/client.js, lib/preset/tool-filter.mjs')
+console.log('[' + pkg.name + '] built lib/index.js, lib/client.js, lib/preset/tool-filter.mjs')

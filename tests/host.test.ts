@@ -24,7 +24,8 @@ describe('chat preset', () => {
     expect(definition.plugins[0]!.config.prefix).toBe(CHAT_SYSTEM_PROMPT)
     expect(definition.plugins[0]!.config.complete).toBe(true)
     expect(definition.plugins[0]!.config.includeRuntimeContext).toBe(false)
-    expect(definition.plugins[1]!.id).toBe('chat-tool-filter')
+    expect(definition.plugins[1]!.id).toBe('chat-web-tools')
+    expect(definition.plugins[2]!.id).toBe('chat-tool-filter')
   })
 
   it('uses a custom system prompt and can keep runtime context', async () => {

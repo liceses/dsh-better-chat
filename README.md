@@ -1,29 +1,40 @@
 # dsh-chat-a2ui
 
-DSH 的 Chat 模式：在原生 Session 壳里换掉消息区，保留流式 Markdown、图片、思考过程、工具卡、新建对话和任意轮分支。对话记录、侧栏、composer、轨迹、上下文管理都复用 DSH 自己的实现。
+DSH 的 Chat 模式：左栏一个 **Chat** 入口，打开一块独立的 Chat 工作区。它复用 DSH 的 Session、composer、轨迹、分支和上下文管理，只重做消息区与入口外壳。对话仍然是普通 Session，可多开、可切换、可从任意一轮分叉。
 
-当前是 **P0**：自研 Chat 视图 + `chat` agent preset。A2UI 表面渲染在 P1 接入。
+当前是 **P0.7**：自研 Chat 入口 + 消息区 + 左栏会话列表 + 轨迹抽屉，软玻璃视觉、可切换动效、暗色主题；左栏与原生侧栏共用一条沟槽，思考 / 工具调用收成内容宽的旁注行。A2UI 表面在 P1 接入，当前保留普通流式文字。
 
 ## 能力
 
-| 能力 | P0 状态 |
+| 能力 | P0.7 状态 |
 | --- | --- |
+| 入口 | 左栏 **Chat** 面板；主面板独立，不占用原生 conversation |
 | 流式 Markdown | 支持，marked + DOMPurify，逐 token 增长 |
-| 图片 | 支持会话附件，带灯箱；失败降级 |
-| 思考过程 | 折叠面板，流式时显示进度 |
-| 工具调用 | 通用折叠卡，参数/结果/错误 |
-| 新建对话 | header「新对话」按钮，创建 `chat` preset 的 Session；空白会话先走原生落地页，发出第一条消息后自动进入 Chat UI |
-| 任意轮分支 | 每条 turn tail 的「从此分支」，fork 后自动进入 Chat UI |
-| 多开 / 独立上下文 | 复用原生 Session，每个 Session 独立 composer 与上下文 |
-| 自定义系统提示词 | 插件配置 `systemPrompt` |
-| 上下文管理 / 轨迹 / 压缩 | 原生机制不替换 |
-| 上下文注入 | 折叠成一条可展开的「已注入上下文」，不占用户气泡 |
-| A2UI | P1；P0 保留普通流式文字 |
-| 布局动效 | Framer Motion layout + AnimatePresence + spring |
+| 图片 | 会话附件、粘贴图片、灯箱；失败降级 |
+| 思考过程 | 折叠旁注行，流式时带转圈；展开后左侧细线挂正文 |
+| 工具调用 | 折叠旁注行：状态点 + 工具名 + 状态；参数 / 结果在展开区。Chat preset 自带 web_search / web_fetch |
+| Markdown | marked + DOMPurify；紧贴中文的粗体、外链 target/rel 都已修正 |
+| 视觉 | Soft glass 侧栏/header/composer；active 行共享 layoutId；左栏卡片与原生导航行同一条 14–266 沟槽，「新对话」左对齐、行尾「+」 |
+| 动效开关 | 侧栏 ✦ 可切换 full / reduced，localStorage 持久化 |
+| 暗色 | 跟随宿主 `body[data-ds-dark-theme]`，消息区、卡片、侧栏、composer 同步 |
+| 新建对话 | Chat 头部「新对话」、左栏「新对话」；空白会话直接显示 Chat 空态 |
+| 原生新建会话 | Chat 打开期间，左栏原生「新建会话」与 Ctrl/Cmd+N 被接管为新建 Chat 对话 |
+| 任意轮分支 | 每条 turn tail 的「从此分支」，子会话自动成为当前 Chat |
+| 多开 / 独立上下文 | 每个 Chat 是独立 Session，左栏列表可切换，历史互不污染 |
+| 自定义系统提示词 | 插件 host 配置 `systemPrompt` |
+| 上下文管理 / 压缩 | 原生机制不替换 |
+| 上下文注入 | 折叠成一条可展开的「已注入上下文」 |
+| 轨迹 | Header「轨迹」打开右侧抽屉，内嵌原生 trajectory 视图 |
+| 滚动归属 | Chat 主面板内滚动；原生 conversation 的 Chat UI tab 走外层滚动，两者不嵌套 |
+| 退出 | Header 返回箭头回到原生 conversation，原生工作区恢复 |
+| A2UI | P1；当前保留普通流式文字，不显示假的 A2UI 入口 |
+| 布局动效 | Framer Motion layout + AnimatePresence + spring；reduced 档只停常驻循环动画，保留颜色过渡 |
+| 过程行密度 | 相邻思考 / 工具行收紧到 10px；只有正文行才占页脚 |
+| 权限选择 | Chat 面板内隐藏原生 permission chip；preset 能力固定 |
 
 ## 安装
 
-把本仓库作为本地插件 link 进 DSH profile。先备份 profile：
+把本仓库 link 进 DSH profile。先备份 profile：
 
 ```powershell
 $ErrorActionPreference = 'Stop'
@@ -44,13 +55,19 @@ Set-Location 'C:\Users\ROG\.dsh\profiles\desktop'
 pnpm install
 ```
 
-重启 DSH 桌面端。重启后：
+重启 DSH 桌面端。重启后左栏出现 **Chat** 面板；原生新会话页的 preset 里也会出现 **Chat**。
 
-1. 新会话页的 preset 里会出现 **Chat**。
-2. 任意 Session 头部出现「新对话」按钮，点击创建 chat 会话；空白会话先显示原生落地页，发出第一条消息后自动进入 Chat UI。
-3. 已有 chat 会话会自动补写 `chat-a2ui` 视图偏好；原生 preset 新建的会话也会在 tab 行首次出现时自动切到 Chat UI。若仍停在「对话」，点一次 **Chat UI** 标签即可。
+## 使用
 
-开发时也可以直接把本目录 link 到 profile 的 `node_modules`，再在 profile `package.json` 注册 bundle。
+1. 点左栏 **Chat**。插件会选中最近更新的 Chat 会话；一个都没有时自动创建一个空白会话。
+2. 直接在底部原生 composer 输入。首条消息发出后空态自动变成正常消息流。
+3. 头部「新对话」或左栏「新对话」创建新会话；左栏列表切换会话。
+4. Chat 打开时，点左栏原生 **新建会话** 或按 **Ctrl/Cmd+N**，仍留在 Chat 里新建，而不是跳到原生 conversation。
+5. 每条回答末尾的「从此分支」以该轮结束点 fork，子会话自动成为当前 Chat。
+6. 头部「轨迹」打开右侧轨迹抽屉。
+7. 头部返回箭头回到原生 conversation；原生左栏、主面板和当前会话都会恢复。
+
+Chat 会话本身是普通 DSH Session，记录、分支、上下文快照与压缩都走宿主机制。会话会落进 DSH 的 session 存储，这是对话记录，不是文件或命令副作用。
 
 ## 配置系统提示词
 
@@ -68,66 +85,109 @@ pnpm install
     includeRuntimeContext: false
 ```
 
-`includeRuntimeContext: false` 是默认值：chat preset 的系统提示里不注入工作目录、git 状态等运行时快照，避免把主机细节带进闲聊。
+`includeRuntimeContext: false` 是默认值：Chat preset 的系统提示里不注入工作目录、git 状态等运行时快照，避免把主机细节带进闲聊。修改后需要重启应用；它影响之后由该 preset 创建的 Chat 会话。
 
 ## 安全边界
 
-`chat` preset 通过 `ctx.tools.restrict({ allow: ['web_search', 'web_fetch'] })` 只保留两个联网工具：
+`chat` preset 自己组合 `@deepseek-ai/dsh-tool-web`（web_search / web_fetch），再通过 `ctx.tools.restrict({ allow: ['web_search', 'web_fetch'] })` 只保留这两个联网工具：
 
 - 没有 filesystem、shell、terminal、editor 工具。
 - 没有文件写入或命令执行路径。
-- 对话本身仍写入 DSH Session（这是记录，不是主机副作用）。
-- 如果部署没有注册 web 工具，会退化为 deny 其它所有可限制工具；`run_code` 是 PTC 传输层，此时也没有可调用的端能力。
+- web-app 层把全局 `tool-web` 关掉了；如果 preset 不自己组合，Chat 会话会没有任何联网工具。本插件已修正，并用 `tests/host.test.ts` 锁住插件顺序。
+- `run_code` 是 PTC 传输层，但 Chat preset 没有可调用的端能力。
+- Chat 面板只重做 UI；没有新增网络端口，也没有自建会话存储。
 
 ## 已知限制
 
-- **默认视图选择是宿主的硬约束**：`resolveActiveView` 只认持久化的 `view`，否则回退原生 `chat`，不会自动选第一个 tab。本插件在创建/分支时先写偏好再打开，并对历史 chat 会话做补写；store 已经初始化且仍停在「对话」时，由 `ChatViewSync` 在 tab 行首次出现时点一次 Chat UI，每个 Session 只尝试一次，之后用户手动切回「对话」不会被覆盖。
-- 原生新会话页直接选 **Chat** preset 时，View store 可能在选 preset 之前就用旧偏好初始化；`ChatViewSync` 负责在首条消息后把 tab 拨到 Chat UI，不再需要手点。
-- P0 只接管消息区；composer、侧栏、header 主体、轨迹都保留原生实现，仅额外加了一个 header「新对话」按钮。
-- 新建的空白会话会被宿主强制显示落地页（ConversationMainPanel 的 hero 分支），此时没有 view tabs；发出第一条消息后才出现「对话 / Chat UI / 轨迹」，Chat UI 会按写入的偏好自动选中。
-- 分支按钮只在 turn tail 可用；单条 assistant 消息内部不做分叉。
-- 图片灯箱、工具卡是通用实现，不包含原生 Chat 的专用 inspector。
-- P0 没有 A2UI 表面；prompt 里明确要求纯 Markdown。
+- **不是零落盘**：Chat 复用 DSH Session，对话记录、附件和分支会由宿主持久化。插件不额外写业务数据。
+- **Chat 是主面板，不是原生 conversation 的 View**：点左栏 Chat 打开独立面板；原生 conversation 里的 **Chat UI** tab 仍然保留，需要手动选择。插件不再自动改任何会话的 View 偏好。
+- **刷新后回到原生 conversation**：Chat 的当前选择只在内存里。重新点左栏 Chat 会选最近的 Chat 会话，不保证是刷新前精确选中的那一个。
+- **A2UI 还未接入**：prompt 明确要求纯 Markdown；Header 不显示 A2UI 入口，避免把未完成的能力伪装成开关。
+- **窄窗受限**：DSH 桌面壳在约 1000px 以下不会收起原生侧栏，Chat 面板会被原生侧栏挤压。390px 手机模拟不可用；这是宿主布局限制，不是 Chat 视图自身。
+- **图片输入**：已实测“粘贴图片 + 文字”发送；文件选择器路径未在浏览器自动化里验证。
+- **非 chat 会话**：Chat 面板只展示 `agentPreset=chat` 的 Session；原生会话不会出现在 Chat 左栏里。
+- **旧会话没有 web 工具**：P0.6 之前创建的 Chat 会话沿用了旧 preset，不会追溯获得 `chat-web-tools`；需要新开一条 Chat 对话。
+- **左栏会话列表隐藏滚动条**：为了让行、表头和「新对话」右边缘对齐，滚动条不再占位；列表很长时靠滚轮 / 触控板 / 键盘滚动。
 
-## P0 验收（隔离实例）
+## P0.7 验收
 
-以下项目在临时 `DSH_HOME` + 本地假模型上实际跑过，不是仅代码审查：
+P0.7 只动左栏几何与过程行样式，验收在 `chatweb` profile 的独立实例（`--profile chatweb --port 11778`）+ 真实 DeepSeek V4.1 Flash + 浏览器自动化下完成：
 
-- 流式 Markdown：10 片 SSE 增量增长，标题/列表/引用/代码块/链接正常，过程无整页闪烁。
-- 贴底滚动：流式内容变高时不会被浏览器的滚动锚定误判成“用户上滚”；向上滚后出现「回到底部」，点击可重新贴底。
-- 图片：会话附件按 `sha256:<64hex>` 引用，异步 `imageUrl` 换成 blob 后渲染；加载中、失败降级、灯箱（Esc / 点遮罩 / 关闭按钮）可用。
-- 分支：从第 1 轮和第 2 轮的 turn tail 分叉，子会话标题递增、内容截止到该轮、Chat UI 自动选中。
-- 新建会话：落在父会话的 workspace，`agentPreset=chat`；原生 Hero 发出首条消息后自动选中 Chat UI。
-- 会话切换：侧栏切换不同 Session 时各自保持独立的历史与滚动。
-- 上下文注入：`source.kind=runtime-context` 的节点折叠成「已注入上下文」，展开后显示工作目录，不再渲染成蓝色用户气泡。
-- 真实模型：chatweb profile + DeepSeek V4.1 Flash，普通 Markdown 回复在 Chat UI 正常渲染。
+- 左栏对齐：卡片外缘 14–266 与原生导航行完全重合（改前 18–295.3，越过 280 侧栏）；表头 / 新对话 / 会话行三处框均为 22.7–257.3；行内文字 30.7 / 31.3 一条竖线。
+- 行宽一致：列表滚动条不再占位（改前行右边缘 273.7 vs 按钮 284.7，差 11px）。
+- 过程行：思考与工具调用宽度 62 / 173px（改前铺满 736px），相邻过程行 33–34px（改前 44–80px），无卡片底色与描边。
+- 流式：真实 web_search + web_fetch 跑完一轮，过程行从「运行中」到「已完成」；正文流式带行尾光标，不再出现长条卡片。
+- 暗色：`body[data-ds-dark-theme]` 下同一套旁注行无白底残留。
+- 守卫：`tests/smoke.test.ts` 锁住沟槽 margin、行宽一致、过程行规则，以及「不许再把全局 animation-duration 压成 1ms」。
 
-未在真机验证的部分：composer 里“图片 + 文字”一起发送（浏览器在注入附件后曾无响应，未复现根因）；深色主题的逐项目测；移动端只做过 390px 宽度检查。
+## P0.6 验收
+
+以下项目在 `chatweb` profile + 真实 DeepSeek 模型 + 浏览器自动化下实际跑过：
+
+- 入口：左栏 Chat → 独立主面板，原生 conversation 不被替换。
+- 空白态：新建 Chat 显示 orb +「开始聊天」+ 底部 composer；发首条消息后就地变成消息流。
+- 工具：新 Chat 会话真实调用 web_search，卡片从「运行中」到「已完成」，模型返回带来源链接的中文总结。
+- Markdown：模型输出 `**总结：**因…` 时不再露出星号；链接带 `target=_blank` 与 `rel=noopener noreferrer`。
+- 暗色：给宿主 `body` 加 `data-ds-dark-theme` 后，消息区、卡片、侧栏、header、composer 全部切到暗色，无白底残留。
+- 动效开关：点侧栏 ✦，页面 `data-motion` 从 full 切到 reduced，刷新后保持；再点恢复。
+- Composer：权限 chip 在 Chat 面板内隐藏，原生 conversation 不受影响。
+- 流式 Markdown：正文、行内代码、列表随 SSE 增长，无整页闪烁。
+- 贴底滚动：Chat 主面板内滚动、原生 Chat UI tab 外层滚动，两条路径都实测；内容变高保持贴底，消息在 composer 上方结束。
+- 图片：把 PNG 放进系统剪贴板后 Ctrl+V，composer 显示附件；发送后用户气泡显示图片，assistant 正常 Markdown 回复。
+- 原生新建会话拦截：Chat 打开时点左栏「新建会话」仍留在 Chat。
+- 会话切换：左栏不同 Chat 会话各自独立历史。
+- 分支：从第 1 / 第 2 轮 turn tail 分叉，子会话包含该轮完整历史并自动切换。
+- 轨迹：Header「轨迹」打开右栏抽屉，内嵌原生 trajectory。
+- 退出：Header 返回箭头回到原生 conversation；原生左栏与主面板恢复。
+- 真实会话记录：标题、分支标题递增（如 `Greeting (1)`）由宿主生成。
+
+未覆盖：真实文件选择器上传、移动端 / 390px 布局、长时间运行的虚拟列表性能、BorderTrail 在真实运行中的逐帧观感。
 
 ## 结构
 
 ```text
 src/index.ts                     host：注册 chat preset、系统提示词、web-only 工具限制
 src/preset/tool-filter.mjs       preset scope 的工具白名单
-src/client/index.tsx             注册 conversation.view + header 新对话 + 偏好补写 + 自动切 tab
+src/client/index.tsx             注册 Chat 主面板、sidebar Chat 行、原生 Chat UI view、header 新对话
+src/client/chat-mode/
+  controller.ts                  选择 / 新建 / 分支 / 返回 / 左栏挂载
+  ChatPage.tsx                   主面板根，retain 独立 Session 引用
+  ChatWorkspace.tsx              Chat header、原生 conversation.content、轨迹抽屉、新会话拦截
+  ChatSessionList.tsx            左栏 Chat 会话列表
+  ChatPanelIcon.tsx              左栏面板图标
+  select.ts                      按 agentPreset=chat 过滤与排序
+  useChatMode.ts                 useSyncExternalStore 绑定
 src/client/chat-a2ui/
-  ChatA2UIView.tsx               消息流容器、滚动、空态
+  ChatA2UIView.tsx               消息流容器、内滚动、空态
   ChatRow.tsx                    按节点 kind 分发
-  Markdown.tsx                   流式 Markdown
+  Markdown.tsx                   流式 Markdown、残留粗体提升、链接加固
   AssistantBlocks.tsx            text / reasoning / tool / image 组合
   ToolCard.tsx                   工具调用折叠卡
   ChatImage.tsx                  图片与灯箱
   Reasoning.tsx                  思考过程
   BranchButton.tsx               从此分支
-  ScrollToBottom.tsx             贴底滚动
-  style.ts                       CSS（注入一次）
-  motion.ts                      spring 常量
+  ScrollToBottom.tsx             贴底滚动（Chat 视图强制内滚动）
+  style.ts                       基础 CSS（注入一次）+ 动效变量块
+  style-p06.ts                   P0.6 软玻璃、动效开关、暗色主题
+  motion-config.ts               读 motion.config.json：类型 / 兜底 / 校验
+  motion.ts                      spring 与行入场退场（从配置派生）
 src/client/session/
-  preferences.ts                 dsh.conversation.<id> 的 view 读写
-  actions.ts                     create / fork / seed
-  NewChatButton.tsx              header 按钮
-  ChatViewSync.tsx               静默把已存偏好的会话切到 Chat UI
+  actions.ts                     create / fork
+  NewChatButton.tsx              原生 header 的新对话入口
 ```
+
+## 动效配置
+
+界面里所有动效数值都在仓库根的 **`motion.config.json`**，没有写死在组件里：
+
+- `springs.*`：行入场 / 容器尺寸 / 折叠体的 spring（stiffness / damping / mass）。
+- `row.enter` / `row.exit`：行进场位移与透明度、退场时长与缓动。
+- `css.*`：流式光标、状态点脉冲、思考转圈、空态 orb 的循环周期，写成 `--caui-motion-*` 变量。
+- `textEffect` / `animatedGroup` / `shimmer` / `scramble` / `borderTrail` / `progressiveBlur`：各处 motion-primitives 的预置与参数。
+
+读法是**构建期内联**：esbuild 把 JSON 打进 `lib/client.js`，所以发布包不依赖这个文件存在（`package.json` 的 `files` 不变）。改完配置要 `npm run build`，应用里刷新窗口生效。
+
+配置写错不会白屏：缺键 / 类型不对 / 枚举越界的那个叶子退回 `DEFAULT_MOTION`（见 `motion-config.ts`）并 `console.warn` 一次，其余照常。
 
 ## 开发
 
@@ -135,6 +195,7 @@ src/client/session/
 npm run typecheck
 npm test
 npm run build
+node scripts/verify-bundle.mjs
 ```
 
 `npm run build` 产出：
@@ -147,6 +208,6 @@ npm run build
 
 - `chat_surface` 工具，A2UI JSON 流式输出。
 - CopilotKit 渲染器 + 可替换 renderer registry。
-- 一键开关 A2UI / 原生文字。
-- A2UI 模式完全接管 AI 交互，token 级增量渲染。
-- 保留 P0 的 fallback：表面解析失败时退回 Markdown。
+- 一键开关 A2UI / 原生文字；A2UI 模式完全接管 AI 交互。
+- Framer Motion layout + AnimatePresence + spring，让组件随 JSON 流生长并推挤排版。
+- 表面解析失败时退回 P0 的 Markdown。

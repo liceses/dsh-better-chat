@@ -6,8 +6,14 @@
  * 样式表常驻即可，插件卸载时不需要移除（宿主会整体刷新页面）。
  */
 
+import { P06_CSS } from './style-p06'
+import { motionCssVars } from './motion-config'
+
 /** 注入的 <style> 元素使用的标记属性。 */
 export const CHAT_STYLE_ATTR = 'data-dsh-chat-a2ui'
+
+/** 动效变量块的标记属性：4 个 CSS 时长由 motion.config.json 生成。 */
+export const MOTION_VARS_ATTR = 'data-caui-motion-vars'
 
 /**
  * 完整样式表。
@@ -27,15 +33,15 @@ export const CHAT_CSS = `
    作用域与设计变量桥接
    --------------------------------------------------------------------------- */
 .caui-root {
-  --caui-fg: var(--dsw-foreground, #1c1c22);
-  --caui-bg: var(--dsw-background, #ffffff);
-  --caui-card: var(--dsw-card, var(--dsw-surface, #ffffff));
+  --caui-fg: var(--dsw-alias-label-primary, #1c1c22);
+  --caui-bg: var(--dsw-alias-bg-base, #ffffff);
+  --caui-card: var(--dsw-alias-bg-layer-1, #ffffff);
   --caui-subtle: var(--dsw-subtle, rgba(28, 28, 34, 0.045));
   --caui-subtle-hover: var(--dsw-subtle-hover, rgba(28, 28, 34, 0.08));
-  --caui-muted: var(--dsw-muted-foreground, #6a6a76);
-  --caui-border: var(--dsw-border, rgba(28, 28, 34, 0.12));
-  --caui-border-strong: var(--dsw-border-strong, rgba(28, 28, 34, 0.24));
-  --caui-accent: var(--dsw-accent, #4c5bd4);
+  --caui-muted: var(--dsw-alias-label-secondary, #6a6a76);
+  --caui-border: var(--dsw-alias-border-l2, rgba(28, 28, 34, 0.12));
+  --caui-border-strong: var(--dsw-alias-border-l4, rgba(28, 28, 34, 0.24));
+  --caui-accent: var(--dsw-alias-state-business-primary, #4c5bd4);
   --caui-accent-fg: var(--dsw-accent-foreground, #ffffff);
   --caui-danger: var(--dsw-danger, #d33b3b);
   --caui-ok: var(--dsw-success, #2f9e6b);
@@ -362,6 +368,8 @@ export const CHAT_CSS = `
   color: var(--caui-ok);
 }
 
+/* 4 个循环动画的时长来自 motion.config.json（--caui-motion-*），
+   这里只留名称与节奏函数；没注入变量时用括号里的默认值。 */
 .caui-streaming-cursor {
   display: inline-block;
   width: 0.5em;
@@ -370,7 +378,41 @@ export const CHAT_CSS = `
   border-radius: 1px;
   background: currentColor;
   vertical-align: -0.16em;
-  animation: caui-caret-blink 1.05s steps(2, start) infinite;
+  animation-name: caui-caret-blink;
+  animation-duration: var(--caui-motion-caret, 1.05s);
+  animation-timing-function: steps(2, start);
+  animation-iteration-count: infinite;
+}
+
+/* 流式块的高度补间：新内容整块到达时，先停住高度再长到目标，
+   让文字从下边缘一行行长出来。时长来自 stream.clipDuration。 */
+.caui-md-clip {
+  overflow: hidden;
+}
+
+.caui-md-clip-animated {
+  transition: height var(--caui-clip-duration, 0.24s) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 流式尾巴：逐字模糊渐入。时长与模糊半径来自 motion.config.json 的 stream.*，
+   由 Markdown 组件内联成 --caui-stream-* 两个变量。 */
+.caui-md-stream-char {
+  animation-name: caui-md-stream-in;
+  animation-duration: var(--caui-stream-duration, 0.26s);
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+@keyframes caui-md-stream-in {
+  from {
+    opacity: 0.12;
+    filter: blur(var(--caui-stream-blur, 6px));
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
 }
 
 .caui-live-dot {
@@ -380,7 +422,10 @@ export const CHAT_CSS = `
   height: 7px;
   border-radius: 50%;
   background: var(--caui-accent);
-  animation: caui-pulse 1.6s ease-in-out infinite;
+  animation-name: caui-pulse;
+  animation-duration: var(--caui-motion-pulse, 1.6s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
 }
 
 /* ---------------------------------------------------------------------------
@@ -461,7 +506,10 @@ export const CHAT_CSS = `
   border: 2px solid var(--caui-border-strong);
   border-top-color: var(--caui-accent);
   border-radius: 50%;
-  animation: caui-spin 0.8s linear infinite;
+  animation-name: caui-spin;
+  animation-duration: var(--caui-motion-spin, 0.8s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
 }
 
 /* ---------------------------------------------------------------------------
@@ -526,7 +574,10 @@ export const CHAT_CSS = `
   border: 2px solid var(--caui-border-strong);
   border-top-color: var(--caui-accent);
   background: transparent;
-  animation: caui-spin 0.8s linear infinite;
+  animation-name: caui-spin;
+  animation-duration: var(--caui-motion-spin, 0.8s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
 }
 
 .caui-tool-status[data-state="error"] {
@@ -753,9 +804,9 @@ export const CHAT_CSS = `
   transform: translateY(0);
 }
 
-/* 原生会话壳用 [data-conversation-scroll] 拥有滚动时，本视图不能再套一层
-   固定高度的内部滚动，否则消息会被裁在一个视口里、外层还多一条滚动条。
-   此时让根节点按内容自然增高，回到底部按钮改为固定定位。 */
+/* 原生 conversation 的 Chat UI tab 由 [data-conversation-scroll] 拥有滚动。
+   此时让根节点按内容自然增高，末尾留出 composer 的高度，
+   回到底部按钮改为固定定位，避免和内层滚动容器叠在一起。 */
 .caui-root[data-scroll-owner="outer"] {
   flex: 0 0 auto;
   height: auto;
@@ -768,8 +819,8 @@ export const CHAT_CSS = `
 }
 
 .caui-root[data-scroll-owner="outer"] .caui-flow {
-  /* 外层滚动时输入框是浮层（约 150px），留足底部空间，避免最后一段被压住 */
-  padding-bottom: 176px;
+  /* 外层滚动时输入框是浮层，给消息流末尾留出默认 composer 高度。 */
+  padding-bottom: var(--caui-composer-clearance, 270px);
 }
 
 .caui-root[data-scroll-owner="outer"] .caui-scroll-button {
@@ -1327,6 +1378,606 @@ export const CHAT_CSS = `
   font-size: 0.85em;
 }
 
+
+/* ---------------------------------------------------------------------------
+   Chat 模式：独立主面板 + 侧栏会话列表
+   --------------------------------------------------------------------------- */
+.caui-chat-page,
+.caui-chat-list {
+  --caui-fg: var(--dsw-alias-label-primary, #1c1c22);
+  --caui-bg: var(--dsw-alias-bg-base, #ffffff);
+  --caui-card: var(--dsw-alias-bg-layer-1, #ffffff);
+  --caui-subtle: var(--dsw-subtle, rgba(28, 28, 34, 0.045));
+  --caui-subtle-hover: var(--dsw-subtle-hover, rgba(28, 28, 34, 0.08));
+  --caui-muted: var(--dsw-alias-label-secondary, #6a6a76);
+  --caui-border: var(--dsw-alias-border-l2, rgba(28, 28, 34, 0.12));
+  --caui-border-strong: var(--dsw-alias-border-l4, rgba(28, 28, 34, 0.24));
+  --caui-accent: var(--dsw-alias-state-business-primary, #4c5bd4);
+  --caui-accent-fg: var(--dsw-accent-foreground, #ffffff);
+  --caui-danger: var(--dsw-danger, #d33b3b);
+  --caui-radius: var(--dsw-radius, 12px);
+  --caui-radius-sm: var(--dsw-radius-sm, 8px);
+  --caui-shadow: var(--dsw-shadow-popover, 0 10px 30px rgba(15, 18, 42, 0.12));
+  --caui-sans: var(--dsw-font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif);
+
+  color: var(--caui-fg);
+  font-family: var(--caui-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.caui-chat-page {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--caui-bg);
+  font-size: 15px;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.caui-chat-page *,
+.caui-chat-page *::before,
+.caui-chat-page *::after,
+.caui-chat-list *,
+.caui-chat-list *::before,
+.caui-chat-list *::after {
+  box-sizing: border-box;
+}
+
+.caui-chat-page :focus-visible,
+.caui-chat-list :focus-visible {
+  outline: 2px solid var(--caui-accent);
+  outline-offset: 2px;
+}
+
+.caui-chat-workspace {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 头部：返回、标题、原生动作、轨迹开关 -------------------------------- */
+.caui-chat-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--caui-border);
+  background: var(--caui-bg);
+}
+
+.caui-chat-header-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.caui-chat-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.caui-chat-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.caui-chat-title > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.caui-chat-subtitle {
+  color: var(--caui-muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.caui-chat-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.caui-chat-icon-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--caui-radius-sm);
+  background: transparent;
+  color: var(--caui-muted);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.caui-chat-icon-button:hover {
+  background: var(--caui-subtle-hover);
+  color: var(--caui-fg);
+}
+
+.caui-chat-toolbar-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--caui-radius-sm);
+  background: transparent;
+  color: var(--caui-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.caui-chat-new-glyph {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.caui-chat-toolbar-button:hover:not(:disabled) {
+  background: var(--caui-subtle);
+  color: var(--caui-fg);
+}
+
+.caui-chat-toolbar-active {
+  border-color: var(--caui-border);
+  background: var(--caui-subtle);
+  color: var(--caui-fg);
+}
+
+.caui-chat-toolbar-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.caui-chat-a2ui-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--caui-muted);
+}
+
+.caui-chat-body {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+}
+
+.caui-chat-main {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A blank Chat Session keeps the resident composer, but its views area renders
+   nothing (the native guard hides it while blank). Pin the composer to the
+   floor and show a Chat-specific empty state above it instead of the native
+   onboarding Hero. */
+.caui-chat-blank [data-conversation-scroll] {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.caui-chat-blank-state {
+  position: absolute;
+  inset: 0 0 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 32px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.caui-chat-blank-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--caui-fg);
+}
+
+.caui-chat-blank-hint {
+  max-width: 420px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--caui-muted);
+}
+
+/* 右侧轨迹栏：默认折叠，展开时由 Framer Motion 驱动宽度 --------------- */
+.caui-chat-dock {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--caui-border);
+  background: var(--caui-bg);
+}
+
+.caui-chat-dock-inner {
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  height: 100%;
+  min-height: 0;
+}
+
+.caui-chat-dock-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--caui-border);
+}
+
+.caui-chat-dock-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--caui-muted);
+}
+
+.caui-chat-dock-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.caui-chat-dock-conversation {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* The embedded Conversation factory always mounts its resident composer;
+   the dock only needs the trajectory body. */
+.caui-chat-dock-conversation [data-conversation-region="composer"] {
+  display: none !important;
+}
+
+/* 状态页 ---------------------------------------------------------------- */
+.caui-chat-status {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.caui-chat-status-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 4px;
+  border: 1px solid var(--caui-border);
+  border-radius: 999px;
+  background: var(--caui-subtle);
+  color: var(--caui-accent);
+  font-size: 17px;
+}
+
+.caui-chat-status-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.caui-chat-status-detail {
+  max-width: 420px;
+  color: var(--caui-muted);
+  font-size: 13px;
+}
+
+.caui-chat-status-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.caui-chat-primary,
+.caui-chat-secondary {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--caui-radius-sm);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.caui-chat-primary {
+  border: 1px solid var(--caui-accent);
+  background: var(--caui-accent);
+  color: var(--caui-accent-fg);
+}
+
+.caui-chat-secondary {
+  border: 1px solid var(--caui-border);
+  background: transparent;
+  color: var(--caui-fg);
+}
+
+/* 左栏 Chat 会话列表 ---------------------------------------------------- */
+.caui-chat-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 10px 8px 12px;
+  font-size: 13px;
+}
+
+.caui-chat-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px 8px;
+}
+
+.caui-chat-list-title {
+  color: var(--caui-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.caui-chat-list-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--caui-subtle);
+  color: var(--caui-muted);
+  font-size: 10.5px;
+  line-height: 17px;
+  text-align: center;
+}
+
+.caui-chat-new {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  height: 34px;
+  margin-bottom: 8px;
+  padding: 0 10px;
+  border: 1px dashed var(--caui-border-strong);
+  border-radius: var(--caui-radius-sm);
+  background: transparent;
+  color: var(--caui-fg);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.caui-chat-new:hover {
+  border-color: var(--caui-accent);
+  background: var(--caui-subtle);
+}
+
+.caui-chat-list-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.caui-chat-row {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--caui-radius-sm);
+  background: transparent;
+  color: var(--caui-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.caui-chat-row:hover {
+  background: var(--caui-subtle);
+}
+
+.caui-chat-row-active {
+  border-color: var(--caui-border);
+  background: var(--caui-subtle);
+}
+
+.caui-chat-row-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.caui-chat-row-title {
+  overflow: hidden;
+  flex: 1 1 auto;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.caui-chat-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 13px;
+  color: var(--caui-muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.caui-chat-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 28px 10px;
+  text-align: center;
+}
+
+.caui-chat-empty-title {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.caui-chat-empty-hint {
+  color: var(--caui-muted);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.caui-chat-error {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--caui-danger) 35%, transparent);
+  border-radius: var(--caui-radius-sm);
+  color: var(--caui-danger);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.caui-chat-retry {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.caui-chat-panel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+}
+
+/* 响应式：窄屏把轨迹改成覆盖层 ------------------------------------------ */
+@media (max-width: 900px) {
+  .caui-chat-toolbar-label {
+    display: none;
+  }
+
+  .caui-chat-toolbar-button {
+    padding: 0 7px;
+  }
+
+  .caui-chat-dock {
+    position: absolute;
+    z-index: 20;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(88vw, 360px) !important;
+    box-shadow: var(--caui-shadow);
+  }
+
+  .caui-chat-dock-inner {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .caui-chat-header {
+    min-height: 50px;
+    padding: 6px 8px;
+  }
+
+  .caui-chat-subtitle {
+    display: none;
+  }
+
+  .caui-chat-list {
+    padding: 6px 4px 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caui-chat-page:not([data-motion="full"]) *,
+  .caui-chat-list:not([data-motion="full"]) * {
+    transition-duration: 1ms !important;
+  }
+}
+
 /* ---------------------------------------------------------------------------
    动画
    --------------------------------------------------------------------------- */
@@ -1401,18 +2052,54 @@ export const CHAT_CSS = `
   --caui-shadow: var(--dsw-shadow-popover, 0 10px 30px rgba(0, 0, 0, 0.5));
 }
 
+@media (prefers-color-scheme: dark) {
+  .caui-chat-page,
+  .caui-chat-list {
+    --caui-fg: var(--dsw-foreground, #e9e9ef);
+    --caui-bg: var(--dsw-background, #141419);
+    --caui-card: var(--dsw-card, var(--dsw-surface, #1b1b22));
+    --caui-subtle: var(--dsw-subtle, rgba(255, 255, 255, 0.055));
+    --caui-subtle-hover: var(--dsw-subtle-hover, rgba(255, 255, 255, 0.095));
+    --caui-muted: var(--dsw-muted-foreground, #9a9aa8);
+    --caui-border: var(--dsw-border, rgba(255, 255, 255, 0.12));
+    --caui-border-strong: var(--dsw-border-strong, rgba(255, 255, 255, 0.22));
+    --caui-accent: var(--dsw-accent, #8b93ff);
+    --caui-accent-fg: var(--dsw-accent-foreground, #101018);
+    --caui-danger: var(--dsw-danger, #ff7b7b);
+    --caui-shadow: var(--dsw-shadow-popover, 0 10px 30px rgba(0, 0, 0, 0.5));
+  }
+}
+
+[data-theme="dark"] .caui-chat-page,
+[data-theme="dark"] .caui-chat-list,
+.caui-chat-page[data-theme="dark"],
+.caui-chat-list[data-theme="dark"] {
+  --caui-fg: var(--dsw-foreground, #e9e9ef);
+  --caui-bg: var(--dsw-background, #141419);
+  --caui-card: var(--dsw-card, var(--dsw-surface, #1b1b22));
+  --caui-subtle: var(--dsw-subtle, rgba(255, 255, 255, 0.055));
+  --caui-subtle-hover: var(--dsw-subtle-hover, rgba(255, 255, 255, 0.095));
+  --caui-muted: var(--dsw-muted-foreground, #9a9aa8);
+  --caui-border: var(--dsw-border, rgba(255, 255, 255, 0.12));
+  --caui-border-strong: var(--dsw-border-strong, rgba(255, 255, 255, 0.22));
+  --caui-accent: var(--dsw-accent, #8b93ff);
+  --caui-accent-fg: var(--dsw-accent-foreground, #101018);
+  --caui-danger: var(--dsw-danger, #ff7b7b);
+  --caui-shadow: var(--dsw-shadow-popover, 0 10px 30px rgba(0, 0, 0, 0.5));
+}
+
 /* 宿主明确要求亮色时，压过系统暗色偏好 */
 [data-theme="light"] .caui-root,
 .caui-root[data-theme="light"] {
-  --caui-fg: var(--dsw-foreground, #1c1c22);
-  --caui-bg: var(--dsw-background, #ffffff);
-  --caui-card: var(--dsw-card, var(--dsw-surface, #ffffff));
+  --caui-fg: var(--dsw-alias-label-primary, #1c1c22);
+  --caui-bg: var(--dsw-alias-bg-base, #ffffff);
+  --caui-card: var(--dsw-alias-bg-layer-1, #ffffff);
   --caui-subtle: var(--dsw-subtle, rgba(28, 28, 34, 0.045));
   --caui-subtle-hover: var(--dsw-subtle-hover, rgba(28, 28, 34, 0.08));
-  --caui-muted: var(--dsw-muted-foreground, #6a6a76);
-  --caui-border: var(--dsw-border, rgba(28, 28, 34, 0.12));
-  --caui-border-strong: var(--dsw-border-strong, rgba(28, 28, 34, 0.24));
-  --caui-accent: var(--dsw-accent, #4c5bd4);
+  --caui-muted: var(--dsw-alias-label-secondary, #6a6a76);
+  --caui-border: var(--dsw-alias-border-l2, rgba(28, 28, 34, 0.12));
+  --caui-border-strong: var(--dsw-alias-border-l4, rgba(28, 28, 34, 0.24));
+  --caui-accent: var(--dsw-alias-state-business-primary, #4c5bd4);
   --caui-accent-fg: var(--dsw-accent-foreground, #ffffff);
   --caui-danger: var(--dsw-danger, #d33b3b);
   --caui-ok: var(--dsw-success, #2f9e6b);
@@ -1494,29 +2181,20 @@ export const CHAT_CSS = `
    减少动态效果：只保留必要的一帧，避免前庭不适
    --------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  .caui-root *,
-  .caui-root *::before,
-  .caui-root *::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
-    transition-delay: 0ms !important;
-  }
-
-  .caui-reasoning-spinner,
-  .caui-tool-status[data-state="running"] {
+  /* 只关常驻循环动画；hover / 焦点用的颜色与背景过渡保留。
+     这里管的是 data-motion 还没写上去的首帧，之后由 [data-motion="reduced"] 接管。 */
+  .caui-root:not([data-motion="full"]) .caui-empty-mark,
+  .caui-chat-page:not([data-motion="full"]) .caui-empty-mark,
+  .caui-chat-page:not([data-motion="full"]) .caui-chat-blank-orb,
+  .caui-root:not([data-motion="full"]) .caui-live-dot,
+  .caui-root:not([data-motion="full"]) .caui-reasoning-spinner,
+  .caui-root:not([data-motion="full"]) .caui-tool-status[data-state="running"] {
     animation: none !important;
   }
 
-  .caui-streaming-cursor {
+  .caui-root:not([data-motion="full"]) .caui-streaming-cursor {
     animation: none !important;
     opacity: 0.8;
-  }
-
-  .caui-live-dot {
-    animation: none !important;
-    opacity: 1;
-    transform: none;
   }
 }
 
@@ -1525,7 +2203,7 @@ export const CHAT_CSS = `
     opacity: 1;
   }
 }
-`
+` + P06_CSS
 
 /** 已经注入过样式的文档（同一实例可能被嵌进多个文档）。 */
 const injectedDocs = new WeakSet<Document>()
@@ -1545,6 +2223,13 @@ export function useChatStyles (): void {
     element.setAttribute(CHAT_STYLE_ATTR, '')
     element.textContent = CHAT_CSS
     head.appendChild(element)
+  }
+  // 动效时长单独一块：内容来自 motion.config.json，改配置不需要动样式表本身。
+  if (head.querySelector('style[' + MOTION_VARS_ATTR + ']') === null) {
+    const vars = doc.createElement('style')
+    vars.setAttribute(MOTION_VARS_ATTR, '')
+    vars.textContent = motionCssVars()
+    head.appendChild(vars)
   }
   injectedDocs.add(doc)
 }

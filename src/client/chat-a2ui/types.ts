@@ -148,6 +148,23 @@ export interface SessionSnapshot {
   blank?: boolean
   openState?: string
   openError?: unknown
+  /** True after the first prompt was submitted but before the first turn opens. */
+  awaitingFirstTurn?: boolean
+  /** True once the composer submitted at least one prompt in this Session. */
+  promptAttempted?: boolean
+}
+
+/** The Conversation projection slice used to choose the shell phase. */
+export interface ConversationSnapshotLike {
+  activeTargets: { size: number }
+}
+
+/** A retained Session generation, structurally compatible with the Host value. */
+export interface SessionReferenceLike {
+  readonly sessionId: string
+  readonly binding: unknown
+  readonly ready: Promise<unknown>
+  release(): void
 }
 
 export interface SessionSummaryLike {
@@ -156,6 +173,8 @@ export interface SessionSummaryLike {
   blank?: boolean
   title?: string
   displayTitle?: string
+  running?: boolean
+  updatedAt?: number
   projectionValues?: { agentPreset?: unknown }
 }
 
@@ -184,6 +203,8 @@ export interface SessionsApi {
     increaseTitle?: boolean
     onCreated?: (childId: string) => void
   }) => Promise<string>
+  /** Present on the real Host service; tests can omit it when only actions run. */
+  retain?: (target: string, options: { source: string }) => SessionReferenceLike
   list: {
     getSnapshot: () => SessionListSnapshot
     subscribe: (listener: () => void) => () => void

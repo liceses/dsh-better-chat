@@ -5,13 +5,19 @@
  * 所以流式输出只会重渲染当前行。
  */
 import { Component, useRef, type ReactElement, type ReactNode } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import type { ChatViewProps } from './types'
 import { ChatRow } from './ChatRow'
 import { ScrollToBottomButton, useStickToBottom } from './ScrollToBottom'
 import { useChatStyles } from './style'
-import { spring } from './motion'
+import { rowEnterStart, rowEntered, rowExitTarget, spring } from './motion'
+import { MOTION } from './motion-config'
+import { useMotionLevel } from './motion-preference'
+import { AnimatedGroup } from './motion-primitives/vendor/AnimatedGroup'
+import { ProgressiveBlur } from './motion-primitives/vendor/ProgressiveBlur'
+import { TextEffect } from './motion-primitives/vendor/TextEffect'
 import { cls } from './classes'
+import { useChatInnerScroll } from './scroll-context'
 import { cx } from './util'
 import { CHAT_VIEW_ID } from '../constants'
 
@@ -53,17 +59,40 @@ export class RowErrorBoundary extends Component<RowBoundaryProps, RowBoundarySta
   }
 }
 
+const SUGGESTIONS = [
+  '用三句话解释一下这个视图适合做什么。',
+  '帮我把一个模糊的想法整理成三条待办。',
+  '比较两种方案，各说一个优点和一个缺点。',
+]
+
 /** 空会话时的引导面板：只展示，不发送。 */
-function EmptyChat (): ReactElement {
+function EmptyChat ({ animated }: { animated: boolean }): ReactElement {
   return (
-    <div className={cls.empty}>
+    <div className={cls.empty} aria-label="开始聊天">
       <div className={cls.emptyMark} aria-hidden="true">✦</div>
-      <div className={cls.emptyTitle}>开始聊天</div>
-      <div className={cls.emptyHint}>这是一个纯对话视图：没有文件与命令工具，输入框在下方，随时可以开始。</div>
-      <div className={cls.emptyHint}>可以这样问：</div>
-      <div className={cls.emptyHint}>· 用三句话解释一下这个视图适合做什么。</div>
-      <div className={cls.emptyHint}>· 帮我把一个模糊的想法整理成三条待办。</div>
-      <div className={cls.emptyHint}>· 比较两种方案，各说一个优点和一个缺点。</div>
+      <div className={cls.emptyTitle} aria-hidden="true">
+        <TextEffect as="div" {...MOTION.textEffect.emptyTitle} trigger={animated}>开始聊天</TextEffect>
+      </div>
+      <div className={cls.emptyHint}>纯对话模式：只聊天和查资料，不写文件、不跑命令。输入框在下方，随时可以开始。</div>
+      {animated
+        ? (
+          <AnimatedGroup
+            preset={MOTION.animatedGroup.suggestions.preset}
+            className={cls.emptySuggestions}
+            variants={{
+              container: {
+                visible: { transition: { staggerChildren: MOTION.animatedGroup.suggestions.stagger } },
+              },
+            }}
+          >
+            {SUGGESTIONS.map(text => <div key={text} className={cls.emptySuggestion}>{text}</div>)}
+          </AnimatedGroup>
+          )
+        : (
+          <div className={cls.emptySuggestions}>
+            {SUGGESTIONS.map(text => <div key={text} className={cls.emptySuggestion}>{text}</div>)}
+          </div>
+          )}
     </div>
   )
 }
@@ -80,21 +109,32 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
   const running = useSession((snapshot) => snapshot.running) === true
   // 打开历史时 order 先为空、随后才灌入事件；这期间不能把“开始聊天”闪出来。
   const openState = useSession((snapshot) => snapshot.openState)
-  const reduceMotion = useReducedMotion() === true
+  const motionLevel = useMotionLevel()
+  const animated = motionLevel === 'full'
 
   const containerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const keys = Array.isArray(order) ? order : []
+  // Chat 主面板里消息区必须自己拥有滚动：原生 viewArea 的高度已经扣掉了
+  // composer，让外层滚动会让内容伸到输入框底下（viewArea 不会跟着长高）。
+  // 原生 conversation 的 Chat UI tab 仍由外层滚动容器负责。
+  const forceInner = useChatInnerScroll()
   const { atBottom, outer, scrollToBottom } = useStickToBottom({
     containerRef,
     contentRef,
     revision: keys.length,
+    forceInner,
   })
 
-  const rowTransition = reduceMotion ? { duration: 0 } : spring
+  const rowTransition = animated ? spring : { duration: 0 }
 
   return (
-    <div className={cls.root} data-chat-view={CHAT_VIEW_ID} data-scroll-owner={outer ? 'outer' : 'inner'}>
+    <div
+      className={cls.root}
+      data-chat-view={CHAT_VIEW_ID}
+      data-scroll-owner={forceInner || !outer ? 'inner' : 'outer'}
+      data-motion={motionLevel}
+    >
       <div className={cls.viewport} ref={containerRef}>
         <div
           className={cls.flow}
@@ -118,16 +158,16 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
                     <div className={cls.emptyHint}>可以切到“对话”标签查看错误详情，或重新打开这个会话。</div>
                   </div>
                   )
-                : <EmptyChat />
+                : <EmptyChat animated={animated} />
           ) : (
             <AnimatePresence initial={false}>
               {keys.map((key) => (
                 <motion.div
                   key={key}
-                  layout
-                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                  layout={animated}
+                  initial={animated ? rowEnterStart : false}
+                  animate={rowEntered}
+                  exit={animated ? rowExitTarget : { opacity: 0 }}
                   transition={rowTransition}
                 >
                   <RowErrorBoundary>
@@ -146,6 +186,12 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
         </div>
         <ScrollToBottomButton atBottom={atBottom} onScrollToBottom={scrollToBottom} />
       </div>
+      {forceInner && (
+        <>
+          <ProgressiveBlur direction="top" className={cls.flowBlurTop} blurLayers={6} blurIntensity={0.32} />
+          <ProgressiveBlur direction="bottom" className={cls.flowBlurBottom} blurLayers={6} blurIntensity={0.32} />
+        </>
+      )}
     </div>
   )
 }

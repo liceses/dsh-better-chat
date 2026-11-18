@@ -22,6 +22,8 @@ export interface AssistantBlocksProps {
   blocks: readonly AssistantBlock[]
   /** step 状态：running 时最后一个块进入流式态。 */
   status?: AssistantData['status']
+  /** 这一行是不是「当前正在写的那一行」（宿主没给 status=running 时的兜底）。 */
+  live?: boolean
   /** 图片块加载器。 */
   loadImage: LoadImage
 }
@@ -39,7 +41,7 @@ function otherLabel (block: unknown): string {
  * 渲染一个 assistant step 的所有块。
  * 空 blocks 返回 null，让调用方只显示页脚时间。
  */
-export const AssistantBlocks = memo(function AssistantBlocks ({ blocks, status, loadImage }: AssistantBlocksProps): ReactElement | null {
+export const AssistantBlocks = memo(function AssistantBlocks ({ blocks, status, live = false, loadImage }: AssistantBlocksProps): ReactElement | null {
   if (!Array.isArray(blocks) || blocks.length === 0) return null
   const streaming = status === 'running'
   const lastIndex = blocks.length - 1
@@ -57,7 +59,11 @@ export const AssistantBlocks = memo(function AssistantBlocks ({ blocks, status, 
       case 'text':
         return (
           <div key={index} className={cls.assistantText}>
-            <Markdown text={block.text} streaming={streaming && index === lastIndex} />
+            <Markdown
+              text={block.text}
+              streaming={streaming && index === lastIndex}
+              tail={live && index === lastIndex}
+            />
           </div>
         )
       case 'reasoning':

@@ -1,16 +1,16 @@
 /**
  * 一次工具调用的可折叠卡片。
  *
- * 头部一眼看清发生了什么：状态点/转圈、工具名、kind 徽标、参数首行预览、展开箭头；
+ * 头部一眼看清发生了什么：状态点、工具名、状态文字、参数首行预览、展开箭头；
  * 正文才是完整参数与结果。默认折叠，button 自带回车/空格键盘支持。
+ * 整行是旁注样式而不是卡片：运行中的反馈只有状态点与状态文字的颜色，
+ * 不跑描边流光，也不做字符乱码过渡——中文状态词被替换成拉丁字符会像渲染故障。
  */
 
 import { useId, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import type { Transition } from 'framer-motion'
 import { cls } from './classes'
 import { cx, firstLine, prettyJson } from './util'
-import { reducedMotion } from './motion'
+import { CollapsibleBody } from './motion-primitives/vendor/CollapsibleBody'
 import type { ContentBlock, ToolCallData } from './types'
 
 export interface ToolCardProps {
@@ -29,9 +29,6 @@ const STATUS_TEXT: Record<ToolStatus, string> = {
 const PREVIEW_LIMIT = 80
 /** 正文结果的最大字符数，超过就截断（完整内容仍可从宿主侧查看）。 */
 const BODY_LIMIT = 6000
-
-const BODY_TRANSITION: Transition = { duration: 0.18, ease: 'easeOut' }
-const INSTANT_TRANSITION: Transition = { duration: 0 }
 
 function isRecord (value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -109,7 +106,6 @@ export function ToolCard ({ root }: ToolCardProps) {
       : 'done'
   const statusText = STATUS_TEXT[status]
   const kind = root.kind !== undefined && root.kind.trim() !== '' ? root.kind.trim() : ''
-  const transition = reducedMotion() ? INSTANT_TRANSITION : BODY_TRANSITION
   const occurredError = errorSummary(root.error)
 
   return (
@@ -146,6 +142,7 @@ export function ToolCard ({ root }: ToolCardProps) {
         <span className={cls.toolStatus} data-state={status} aria-hidden="true" />
         <span className={cls.toolName}>{root.name}</span>
         {kind === '' ? null : <span className={cls.toolChip}>{kind}</span>}
+        <span className={cls.toolStatusText} data-state={status} aria-hidden="true">{statusText}</span>
         {preview === '' ? null : <span className={cls.toolArgs}>{preview}</span>}
         <svg
           className={cls.toolChevron}
@@ -164,26 +161,16 @@ export function ToolCard ({ root }: ToolCardProps) {
           <path d="M4.5 2.5 8 6l-3.5 3.5" />
         </svg>
       </button>
-      <AnimatePresence initial={false}>
-        {open ? (
-          <motion.div
-            key="body"
-            id={bodyId}
-            className={cls.toolBody}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={transition}
-          >
-            {hasArgs ? <pre className={cls.toolArgs}>{argsText}</pre> : null}
-            {hasError ? <pre className={cx(cls.toolResult, cls.toolError)}>{occurredError}</pre> : null}
-            {resultText.trim() === '' ? null : <pre className={cls.toolResult}>{prettyJson(resultText, BODY_LIMIT)}</pre>}
-            {!hasArgs && !hasError && resultText.trim() === ''
-              ? <span className={cls.toolChip}>暂无详细内容</span>
-              : null}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      <CollapsibleBody open={open} id={bodyId} className={cls.toolBody}>
+        {hasArgs ? <pre className={cls.toolArgs}>{argsText}</pre> : null}
+        {hasError ? <pre className={cx(cls.toolResult, cls.toolError)}>{occurredError}</pre> : null}
+        {resultText.trim() === '' ? null : <pre className={cls.toolResult}>{prettyJson(resultText, BODY_LIMIT)}</pre>}
+        {!hasArgs && !hasError && resultText.trim() === ''
+          ? <span className={cls.toolChip}>暂无详细内容</span>
+          : null}
+      </CollapsibleBody>
     </div>
   )
 }
+
+export default ToolCard

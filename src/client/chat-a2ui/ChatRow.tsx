@@ -4,7 +4,7 @@
  * 关键设计：ChatRow 自己按 nodeKey 订阅 chat store，所以流式 token 只会
  * 重渲染当前这一行；父组件只负责顺序、动画和空态。
  */
-import { memo, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { memo, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import type {
   AssistantBlock,
   AssistantData,
@@ -22,6 +22,7 @@ import { AssistantBlocks, type LoadImage } from './AssistantBlocks'
 import { BranchButton } from './BranchButton'
 import { ChatImage } from './ChatImage'
 import { ToolCard } from './ToolCard'
+import { CollapsibleBody } from './motion-primitives/vendor/CollapsibleBody'
 import { cls } from './classes'
 import { cx, formatBytes, formatClock } from './util'
 
@@ -205,20 +206,31 @@ function readContextText (data: UserMessageData): string {
 
 /** 上下文注入是系统旁白，不该占用户气泡；折叠成一条可展开的提示。 */
 function ContextRow ({ data }: { data: UserMessageData }): ReactElement | null {
+  const [open, setOpen] = useState(false)
+  const bodyId = useId() + '-context'
   const text = readContextText(data)
   if (text === '') return null
   const time = readFiniteNumber(data.time)
   return (
     <RowFrame kind="context" variant={cls.rowNotice}>
-      <details className={cls.context}>
-        <summary className={cls.contextSummary}>
+      <div className={cls.context}>
+        <button
+          type="button"
+          className={cls.contextSummary}
+          aria-expanded={open}
+          aria-controls={open ? bodyId : undefined}
+          onClick={() => setOpen(value => !value)}
+        >
           <span className={cls.contextLabel}>已注入上下文</span>
           {time === undefined ? null : (
             <time className={cls.time} dateTime={safeIso(time)}>{formatClock(time)}</time>
           )}
-        </summary>
-        <pre className={cls.contextText}>{text}</pre>
-      </details>
+          <span className={cls.contextChevron} aria-hidden="true" />
+        </button>
+        <CollapsibleBody open={open} id={bodyId} className={cls.contextBody}>
+          <pre className={cls.contextText}>{text}</pre>
+        </CollapsibleBody>
+      </div>
     </RowFrame>
   )
 }
@@ -315,7 +327,7 @@ function CopyButton ({ text }: { text: string }): ReactElement {
   )
 }
 
-function AssistantRow ({ data, loadImage }: { data: AssistantData; loadImage: LoadImage }): ReactElement {
+function AssistantRow ({ data, loadImage, live }: { data: AssistantData; loadImage: LoadImage; live: boolean }): ReactElement {
   const blocks = Array.isArray(data.blocks) ? data.blocks : []
   const status = data.status
   const running = status === 'running'
@@ -324,7 +336,7 @@ function AssistantRow ({ data, loadImage }: { data: AssistantData; loadImage: Lo
   return (
     <RowFrame kind="assistant-step" variant={cls.rowAssistant}>
       <div className={cls.assistant}>
-        <AssistantBlocks blocks={blocks} status={status} loadImage={loadImage} />
+        <AssistantBlocks blocks={blocks} status={status} live={live} loadImage={loadImage} />
         <div className={cls.assistantFooter}>
           {running ? <span className={cls.liveDot} aria-hidden="true" /> : null}
           {!running && status === 'interrupted' ? <span className={cls.time}>已中断</span> : null}
@@ -537,7 +549,7 @@ export const ChatRow = memo(function ChatRow (props: ChatRowProps): ReactElement
     case 'context':
       return <ContextRow data={data as UserMessageData} />
     case 'assistant-step':
-      return <AssistantRow data={data as AssistantData} loadImage={loadImage} />
+      return <AssistantRow data={data as AssistantData} loadImage={loadImage} live={running} />
     case 'tool-call':
       return <ToolRow data={data as ToolCallData} />
     case 'turn-tail':

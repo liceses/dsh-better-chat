@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { cls } from './classes'
+import { MOTION } from './motion-config'
 import { cx } from './util'
 import { reducedMotion } from './motion'
 
@@ -24,6 +25,8 @@ export interface UseStickToBottomOptions<E extends HTMLElement = HTMLElement> {
   containerRef: StickToBottomRef<E>
   contentRef: StickToBottomRef<E>
   revision?: unknown
+  /** 强制使用本视图自己的滚动容器，忽略外层原生滚动体。 */
+  forceInner?: boolean
 }
 
 export interface StickToBottomResult {
@@ -34,8 +37,9 @@ export interface StickToBottomResult {
 }
 
 /** 原生会话壳在消息流外层提供滚动容器；有它时不要再套一层内部滚动。 */
-function resolveOwner (container: HTMLElement | null): HTMLElement | null {
+function resolveOwner (container: HTMLElement | null, forceInner = false): HTMLElement | null {
   if (container === null) return null
+  if (forceInner) return container
   const outer = container.closest('[data-conversation-scroll]')
   return outer instanceof HTMLElement ? outer : container
 }
@@ -47,6 +51,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   containerRef,
   contentRef,
   revision,
+  forceInner = false,
 }: UseStickToBottomOptions<E>): StickToBottomResult {
   const [atBottom, setAtBottom] = useState(true)
   const [outer, setOuter] = useState(false)
@@ -55,6 +60,10 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   const frameRef = useRef<number | null>(null)
   /** 程序化平滑滚动的时间窗，窗口内的位移不算「用户上滚」。 */
   const programmaticUntilRef = useRef(0)
+  /** 贴底补间的帧句柄。 */
+  const tweenRef = useRef<number | null>(null)
+  /** 挂载后第一次贴底直接落位（打开会话不要从顶部一路滑下来），之后都走补间。 */
+  const primedRef = useRef(false)
   /** 上一次 scroll 事件的位置，用来区分用户上滚和内容增长引起的滚动锚定。 */
   const lastTopRef = useRef(0)
 
@@ -67,7 +76,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   const follow = useCallback((behavior: ScrollBehavior = 'auto') => {
     // 动态解析宿主滚动容器：effect 的注册顺序不该影响「跟到底」命中谁。
     const base = containerRef.current
-    const element = base === null ? null : resolveOwner(base)
+    const element = base === null ? null : resolveOwner(base, forceInner)
     if (element === null) return
     const top = element.scrollHeight
     if (behavior === 'auto' || typeof element.scrollTo !== 'function') {
@@ -80,27 +89,96 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       // 某些环境（jsdom / 旧 WebView）没有平滑滚动实现，退回直接赋值。
       element.scrollTop = top
     }
-  }, [containerRef])
+  }, [containerRef, forceInner])
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     stickRef.current = true
     setAtBottom(true)
+    cancelTween()
     const resolved: ScrollBehavior = reducedMotion() ? 'auto' : behavior
     if (resolved !== 'auto') programmaticUntilRef.current = Date.now() + 900
     follow(resolved)
   }, [follow])
 
+  const cancelTween = useCallback(() => {
+    if (tweenRef.current === null) return
+    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(tweenRef.current)
+    tweenRef.current = null
+  }, [])
+
+  /**
+   * 贴底的平滑版：分几帧挪到目标位置，而不是一次 scrollTop = scrollHeight。
+   *
+   * 宿主把助手正文按整段提交，一段常常三四百像素高；一次落位就是肉眼可见的
+   * 整屏跳跃。这里每帧最多走 remaining*0.35（12~220px），大跨度（切换会话、
+   * 重新贴底）仍然直接落位，免得慢慢滑半屏。
+   */
+  const settle = useCallback(function step (): void {
+    if (!stickRef.current) return
+    // 已经有一条补间在跑就让它继续（每一步都会重新读 scrollHeight），
+    // 否则 MutationObserver 和 revision 各起一条链，速度翻倍。
+    if (tweenRef.current !== null) return
+    const base = containerRef.current
+    const element = base === null ? null : resolveOwner(base, forceInner)
+    if (element === null) return
+
+    const target = element.scrollHeight - element.clientHeight
+    const from = element.scrollTop
+    const distance = target - from
+    if (distance <= 1) {
+      element.scrollTop = target
+      return
+    }
+    // 跨度太大（切会话、恢复滚动位置）就落位，别慢慢滑半屏。
+    if (distance > MOTION.scroll.instantAbove) {
+      element.scrollTop = target
+      return
+    }
+
+    // 时长跟距离挂钩、按真实时间推进：帧率高低不影响「多久滑完」，
+    // 大段落（宿主一次能提交近一屏）才会有明确的滑行感。
+    const { duration, maxDuration } = MOTION.scroll
+    const total = Math.min(maxDuration, duration * Math.min(2, Math.max(0.6, distance / 320)))
+    const startedAt = typeof performance === 'object' ? performance.now() : Date.now()
+    const now = (): number => (typeof performance === 'object' ? performance.now() : Date.now())
+
+    const tick = (): void => {
+      tweenRef.current = null
+      if (!stickRef.current) return
+      const elapsed = now() - startedAt
+      const progress = Math.min(1, elapsed / (total * 1000))
+      const eased = 1 - Math.pow(1 - progress, 3)
+      const end = element.scrollHeight - element.clientHeight
+      const next = from + (end - from) * eased
+      element.scrollTop = Math.min(next, end)
+      if (progress >= 1 && end - element.scrollTop <= 1) {
+        element.scrollTop = end
+        return
+      }
+      // 进度走完但内容又长了一截，就接着滑（相邻两段补间看起来是连续的）
+      tweenRef.current = requestAnimationFrame(progress >= 1 ? step : tick)
+    }
+    tweenRef.current = requestAnimationFrame(tick)
+  }, [containerRef, forceInner])
+
   // revision 变化（新消息 / 新 token）时：贴底就立即跟到底；挂载时同样执行一次。
   useIsoLayoutEffect(() => {
     if (!stickRef.current) return
-    follow()
-  }, [revision, follow])
+    // 首次（打开会话 / 挂载）直接落位；之后新增行、新 token 都补间过去，
+    // 否则「新行出现」这一下的整段高度会一次性顶上来，看着就是跳一下。
+    if (!primedRef.current) {
+      primedRef.current = true
+      follow()
+      return
+    }
+    settle()
+  }, [revision, follow, settle])
 
   useIsoLayoutEffect(() => {
     const container = containerRef.current
     if (container === null) return
     const content = contentRef.current
-    const owner = resolveOwner(container)
+    const owner = resolveOwner(container, forceInner)
     if (owner === null) return
     ownerRef.current = owner
     lastTopRef.current = owner.scrollTop
@@ -115,7 +193,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       if (frameRef.current !== null) return
       frameRef.current = requestAnimationFrame(() => {
         frameRef.current = null
-        if (stickRef.current) follow()
+        if (stickRef.current) settle()
       })
     }
 
@@ -135,6 +213,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       // 会把 scrollTop 往下推（delta > 0），那不是用户意图，不能停止跟随。
       if (delta < -2) {
         programmaticUntilRef.current = 0
+        cancelTween()
         setStick(false)
       }
     }
@@ -160,6 +239,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
 
     return () => {
       owner.removeEventListener('scroll', onScroll)
+      cancelTween()
       mutation?.disconnect()
       resize?.disconnect()
       if (frameRef.current !== null) {
@@ -168,7 +248,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       }
     }
     // revision 变化时重挂一次：容器若是后挂载的（空态 → 消息流），也能接上观察器。
-  }, [containerRef, contentRef, revision, follow, setStick])
+  }, [containerRef, contentRef, revision, follow, settle, cancelTween, setStick, forceInner])
 
   return { atBottom, outer, scrollToBottom }
 }

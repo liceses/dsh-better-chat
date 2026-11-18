@@ -5,6 +5,9 @@ node_modules/
 .build/
 *.tsbuildinfo
 
+# local scratch (clipboard helpers, upload probes)
+.tmp/
+
 # isolated test homes / CLI (local verification only)
 .dsh-test-home/
 .dsh-test-cli/

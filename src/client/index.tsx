@@ -1,23 +1,43 @@
 /**
  * Browser half of dsh-chat-a2ui.
  *
- * Registers the "Chat UI" Conversation View, the header's New Chat action, and
- * seeds the persisted View preference for chat-preset Sessions. The native
- * Session shell, composer, sidebar, and trajectory remain in place; only the
- * message area is replaced.
+ * Two surfaces share one Chat implementation:
+ * - a global "Chat" main panel with its own Session reference, header, resident
+ *   composer, and collapsible trajectory dock (entry B);
+ * - a "Chat UI" Conversation View that can still be selected inside the native
+ *   conversation panel.
+ *
+ * The Chat panel never calls uiWorkspace.openSession, so it does not disturb
+ * the native mainView, sidebar, history, or trajectory data.
  * @module dsh-chat-a2ui/client
  */
 
+import type { ComponentType } from 'react'
 import { ChatA2UIView } from './chat-a2ui/ChatA2UIView'
 import type { ImageAttachmentRef, SessionsApi, WorkspacesApi } from './chat-a2ui/types'
-import { CHAT_VIEW_ID, CHAT_VIEW_LABEL } from './constants'
-import { installChatRuntime, type ChatHostRuntime } from './runtime'
-import { createChatSession, forkChatAt, seedChatViews } from './session/actions'
-import { ChatViewSync } from './session/ChatViewSync'
+import { ChatPage } from './chat-mode/ChatPage'
+import { ChatPanelIcon } from './chat-mode/ChatPanelIcon'
+import { ChatSessionList } from './chat-mode/ChatSessionList'
+import { ChatWorkspace } from './chat-mode/ChatWorkspace'
+import { ChatModeController } from './chat-mode/controller'
+import {
+  CHAT_PANEL_ID,
+  CHAT_PANEL_LABEL,
+  CHAT_VIEW_ID,
+  CHAT_VIEW_LABEL,
+} from './constants'
+import { forkChatAt } from './session/actions'
 import { NewChatButton } from './session/NewChatButton'
 
 /** Client services consumed by this plugin. */
-export const inject = ['slots', 'sessions', 'workspaces', 'uiWorkspace', 'uiConversation']
+export const inject = [
+  'slots',
+  'sessions',
+  'workspaces',
+  'layout',
+  'uiConversation',
+  'uiWorkspace',
+]
 
 /** Minimal structural face of the Cordis client root context. */
 interface ClientContext {
@@ -27,18 +47,15 @@ interface ClientContext {
   }
   sessions: SessionsApi
   workspaces: WorkspacesApi
-  uiWorkspace: {
-    openSession: (sessionId: string) => void
-    openWorkspace: (
-      workspaceId: string,
-      beforeOpen?: (sessionId: string) => void,
-      options?: { agentPreset?: string },
-    ) => Promise<void>
+  layout: {
+    selectPanel: (panelId: string | null) => void
   }
   uiConversation: {
     imageUrl: (sessionId: string, attachment: ImageAttachmentRef) => string | Promise<string>
   }
-  effect: (body: () => (() => void) | void, label?: string) => void
+  uiWorkspace: {
+    openSession: (sessionId: string) => void
+  }
 }
 
 /** Resolve the native image URL for one attachment in one Session. */
@@ -47,69 +64,88 @@ function imageUrl (ctx: ClientContext, sessionId: string, attachment: ImageAttac
 }
 
 /**
- * Register the Chat UI contributions.
+ * Register the Chat panel, its Session-scoped body, the sidebar list, the
+ * native View tab, and the entry points.
  * @param ctx - client root context.
  */
 export function apply (ctx: ClientContext): void {
-  const runtime: ChatHostRuntime = {
+  const controller = new ChatModeController({
     sessions: ctx.sessions,
     workspaces: ctx.workspaces,
-    openSession: (sessionId) => { ctx.uiWorkspace.openSession(sessionId) },
-    openWorkspace: (workspaceId, beforeOpen, options) =>
-      ctx.uiWorkspace.openWorkspace(workspaceId, beforeOpen, options),
-  }
-  installChatRuntime(runtime)
-
-  ctx.slots.inject('conversation.view', () => {
-    const disposeView = ctx.slots.register({
-      name: 'conversation.view',
-      id: CHAT_VIEW_ID,
-      order: 1,
-      label: CHAT_VIEW_LABEL,
-      inject: (sessionId: string) => ({
-        loadImage: (attachment: ImageAttachmentRef) => imageUrl(ctx, sessionId, attachment),
-        forkAt: (seq: number) => { void forkChatAt(runtime, sessionId, seq) },
-      }),
-    }, ChatA2UIView)
-    return disposeView
+    slots: ctx.slots,
+    layout: ctx.layout,
+    sidebarComponent: ChatSessionList,
   })
 
+  /**
+   * Branch from a rendered message. Inside the mounted Chat panel the child
+   * becomes the active Chat Session; in the native conversation the child is
+   * opened through uiWorkspace as before.
+   */
+  const branchFromView = (sessionId: string, seq: number): void => {
+    const state = controller.getSnapshot()
+    if (state.mounted && state.activeSessionId === sessionId) {
+      void controller.branch(sessionId, seq)
+      return
+    }
+    void forkChatAt({ sessions: ctx.sessions }, sessionId, seq)
+      .then((child) => {
+        if (child !== undefined) ctx.uiWorkspace.openSession(child)
+      })
+      .catch((error: unknown) => { console.warn('[chat-a2ui] 分支失败：', error) })
+  }
+
+  // The keyed main panel owns a session-scoped child; the renderer injects a
+  // SessionProvider for that child declaration, and ChatPage binds it to its
+  // own retained reference.
+  ctx.slots.inject('main', () => {
+    const disposePanel = ctx.slots.register({
+      name: 'main',
+      key: CHAT_PANEL_ID,
+      children: {
+        'chat-a2ui.conversation': { kind: 'single', scope: 'session' },
+      },
+      inject: () => ({ controller, sessions: ctx.sessions }),
+    }, ChatPage as unknown as ComponentType<Record<string, unknown>>)
+    // A child slot is owned by the entry that declared it: register the body
+    // inside the same declaration lifetime, not in a separate inject group.
+    const disposeBody = ctx.slots.register({
+      name: 'chat-a2ui.conversation',
+      inject: () => ({ controller }),
+    }, ChatWorkspace as unknown as ComponentType<Record<string, unknown>>)
+    return () => { disposeBody(); disposePanel() }
+  })
+
+  // Sidebar row: same id as the main key, so selecting it opens this panel.
+  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+    name: 'sidebar.panellist',
+    id: CHAT_PANEL_ID,
+    order: 5,
+    label: () => CHAT_PANEL_LABEL,
+  }, ChatPanelIcon))
+
+  // Native Conversation View: kept as a manual tab. Selecting it no longer
+  // happens automatically; branch navigates through uiWorkspace.
+  ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view',
+    id: CHAT_VIEW_ID,
+    order: 1,
+    label: CHAT_VIEW_LABEL,
+    inject: (sessionId: string) => ({
+      loadImage: (attachment: ImageAttachmentRef) => imageUrl(ctx, sessionId, attachment),
+      forkAt: (seq: number) => { branchFromView(sessionId, seq) },
+    }),
+  }, ChatA2UIView))
+
+  // Header action reused by both headers. In the native header it enters the
+  // Chat panel and asks the controller to create the first conversation; in
+  // the Chat header it creates a sibling conversation in place.
   ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
     name: 'conversation.session.header.actions',
     id: 'chat-a2ui-new',
     order: 20,
-    inject: (sessionId: string) => ({
-      createChat: () => createChatSession(runtime, sessionId),
+    inject: () => ({
+      createChat: () => controller.enterNew(),
     }),
   }, NewChatButton))
-
-  // The native preset picker opens the blank Session before the user picks
-  // Chat, so its View store can initialize from the old preference. Restore
-  // the stored Chat UI choice once the tab row appears, through the same click
-  // path a user takes; never fight a later manual switch back to 对话.
-  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
-    name: 'conversation.session.header.actions',
-    id: 'chat-a2ui-view-sync',
-    order: 10,
-  }, ChatViewSync))
-
-  // Existing chat Sessions may predate this plugin. Seed only missing string
-  // preferences; a deliberate native "chat" choice is never overwritten.
-  // The write must stay synchronous with the Session-list notification: a
-  // microtask would let the newly opened Session's View store initialize from
-  // the old preference first. ChatViewSync is the fallback; keeping this path
-  // synchronous means the common case never needs it.
-  ctx.effect(() => {
-    const seedNow = (): void => {
-      try {
-        const written = seedChatViews(runtime)
-        if (written > 0) console.info(`chat-a2ui: selected Chat UI for ${written} session(s)`)
-      } catch (error: unknown) {
-        console.warn('chat-a2ui: could not seed view preferences', error)
-      }
-    }
-    const stop = ctx.sessions.list.subscribe(seedNow)
-    seedNow()
-    return stop
-  }, 'chat-a2ui: seed Chat UI view preference')
 }
