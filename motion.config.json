@@ -66,14 +66,18 @@
     "rotateYDistance": 10
   },
   "scroll": {
-    "lead": 0.28,
-    "headroomMax": 180,
-    "speedTau": 0.25,
-    "holdMs": 1200,
-    "releaseTau": 0.8,
-    "stiffness": 120,
-    "damping": 18,
-    "mass": 1,
+    "minSpace": 200,
+    "maxSpaceRatio": 0.7,
+    "lead": 0.55,
+    "burstFactor": 1,
+    "burstDecay": 30,
+    "paceMin": 260,
+    "paceMax": 4000,
+    "velocityCap": 1.35,
+    "gain": 5,
+    "accel": 9000,
+    "speedTau": 0.35,
+    "holdMs": 900,
     "instantAbove": 1600
   },
   "stream": {

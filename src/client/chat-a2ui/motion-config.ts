@@ -47,18 +47,27 @@ export interface MotionConfig {
     scaleDistance: number
     rotateYDistance: number
   }
-  /** 贴底跟随：补间基准时长、最长时长、超过多少像素就直接落位（切会话那种跨度）。 */
+  /** 贴底跟随：动态底部余量 + 前馈限速。 */
   scroll: {
-    /** 按生成速度预开的底部余量：秒数 × 速度（px/s）。 */
+    /** 生成期间的最低底部余量（px）。 */
+    minSpace: number
+    /** 余量上限（占视口比例）。 */
+    maxSpaceRatio: number
+    /** 余量 = 速度 × lead（s）。 */
     lead: number
-    headroomMax: number
+    /** 按最近单批高度预留的比例，以及它的记忆衰减（px/s）。 */
+    burstFactor: number
+    burstDecay: number
+    /** 前馈速度的上下限（px/s）与限速倍数。 */
+    paceMin: number
+    paceMax: number
+    velocityCap: number
+    /** 反馈增益（1/s）与速度变化率上限（px/s²）。 */
+    gain: number
+    accel: number
+    /** 估速的长时间常数（s）与停止后的保持时间（ms）。 */
     speedTau: number
     holdMs: number
-    releaseTau: number
-    /** 跟随位置的弹簧。 */
-    stiffness: number
-    damping: number
-    mass: number
     instantAbove: number
   }
   /** 流式尾巴的模糊渐入：模糊半径、单字时长、相邻字错开、每帧最多处理多少字。 */
@@ -103,7 +112,21 @@ export const DEFAULT_MOTION: MotionConfig = {
     scaleDistance: 1.1,
     rotateYDistance: 10,
   },
-  scroll: { lead: 0.28, headroomMax: 180, speedTau: 0.25, holdMs: 1200, releaseTau: 0.8, stiffness: 120, damping: 18, mass: 1, instantAbove: 1600 },
+  scroll: {
+    minSpace: 200,
+    maxSpaceRatio: 0.7,
+    lead: 0.55,
+    burstFactor: 1,
+    burstDecay: 30,
+    paceMin: 260,
+    paceMax: 4000,
+    velocityCap: 1.35,
+    gain: 5,
+    accel: 9000,
+    speedTau: 0.35,
+    holdMs: 900,
+    instantAbove: 1600,
+  },
   stream: { blur: 9, duration: 0.42, stagger: 0.004, maxChars: 140, clipSpeed: 1000, clipMin: 0.12, clipMax: 0.95 },
   scramble: { duration: 0.8, speed: 0.04 },
   borderTrail: { size: 110, duration: 3.4 },
@@ -164,14 +187,18 @@ num('shimmer.xDistance', -30, 30)
 num('shimmer.yDistance', -30, 30)
 num('shimmer.scaleDistance', 0.2, 2)
 num('shimmer.rotateYDistance', -90, 90)
-num('scroll.lead', 0, 2)
-num('scroll.headroomMax', 0, 600)
-num('scroll.speedTau', 0.05, 2)
+num('scroll.minSpace', 0, 400)
+num('scroll.maxSpaceRatio', 0, 1)
+num('scroll.lead', 0, 3)
+num('scroll.burstFactor', 0, 3)
+num('scroll.burstDecay', 0, 2000)
+num('scroll.paceMin', 0, 4000)
+num('scroll.paceMax', 50, 8000)
+num('scroll.velocityCap', 0.2, 6)
+num('scroll.speedTau', 0.05, 4)
 num('scroll.holdMs', 0, 6000)
-num('scroll.releaseTau', 0.05, 4)
-num('scroll.stiffness', 10, 600)
-num('scroll.damping', 2, 120)
-num('scroll.mass', 0.1, 10)
+num('scroll.gain', 0.5, 40)
+num('scroll.accel', 500, 40000)
 num('scroll.instantAbove', 200, 20000)
 num('stream.blur', 0, 24)
 num('stream.duration', 0.05, 2)

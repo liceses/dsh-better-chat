@@ -386,6 +386,11 @@ export const CHAT_CSS = `
 
 /* 流式块的高度补间：新内容整块到达时，先停住高度再长到目标，
    让文字从下边缘一行行长出来。时长按距离算，由 Markdown 内联给出（transitionDuration）。 */
+.caui-flow-tail {
+  flex: none;
+  height: 0;
+}
+
 .caui-md-clip {
   overflow: hidden;
 }
