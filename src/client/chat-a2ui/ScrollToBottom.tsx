@@ -16,6 +16,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { cls } from './classes'
 import { MOTION } from './motion-config'
 import { createFollowState, stepFollow, type FollowState } from './scroll-follow'
+import { probeHud, probeInstall, probeLog, probeLogged, probeTick } from './scroll-probe'
 import { cx } from './util'
 import { reducedMotion } from './motion'
 
@@ -75,12 +76,18 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   const followRef = useRef<FollowState | null>(null)
   /** 上一次由程序写进去的 scrollTop：用来区分「我们的位移」和「用户上滚」。 */
   const writtenRef = useRef(-1)
+  /** 用户最近一次自己滚动的时刻：避免在他滚动时做「直接落位」之类的动作。 */
+  const userScrollAtRef = useRef(0)
+  /** 探针用：最近一次 scrollTop 变化的来源与幅度。 */
+  const lastMoveRef = useRef<{ delta: number; source: string }>({ delta: 0, source: '-' })
   /** 当前写进尾部占位的高度（px）。 */
   const spaceRef = useRef(0)
 
   /** 把余量写进占位元素（直接改 style，不经过 React）。 */
   const applySpace = useCallback((next: number): void => {
+    const previous = spaceRef.current
     spaceRef.current = next
+    if (Math.abs(next - previous) >= 0.5) probeLog('space', { from: Math.round(previous), to: Math.round(next) })
     const tail = tailRef?.current ?? null
     if (tail === null) return
     tail.style.height = (next > 0.5 ? next.toFixed(1) : '0') + 'px'
@@ -160,7 +167,8 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       const contentHeight = Math.max(0, element.scrollHeight - applied)
 
       // 跨度太大（切会话、恢复滚动位置）：直接落位，别慢慢滑半屏。
-      if (element.scrollHeight - element.clientHeight - element.scrollTop > MOTION.scroll.instantAbove) {
+      const busyUser = Date.now() - userScrollAtRef.current < 600
+      if (!busyUser && element.scrollHeight - element.clientHeight - element.scrollTop > MOTION.scroll.instantAbove) {
         applySpace(0)
         if (sticking) {
           element.scrollTop = element.scrollHeight
@@ -170,14 +178,51 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
         return
       }
 
+      // 兜底：scroll 事件在某些环境下会被推迟（后台标签、被遮挡的窗口），
+      // 所以这里每帧自查一次「位置是不是被别人动过」。自己写的值记在 writtenRef，
+      // 只要实际值和它差 ≥2px，就说明是用户（或浏览器夹边）动了。
+      const expectedTop = writtenRef.current
+      const actualTop = element.scrollTop
+      if (expectedTop >= 0 && Math.abs(actualTop - expectedTop) >= 2) {
+        const delta = actualTop - lastTopRef.current
+        lastTopRef.current = actualTop
+        probeLog('external', { top: Math.round(actualTop), delta: Math.round(delta), stick: sticking ? 1 : 0 })
+        userScrollAtRef.current = Date.now()
+        if (delta < -2 && sticking) {
+          cancelTween()
+          applySpace(0)
+          setStick(false)
+          return
+        }
+      }
+
       const state = followRef.current ?? createFollowState(at, contentHeight, applied)
       const result = stepFollow(state, { height: contentHeight, viewport, at, config: MOTION.scroll })
       followRef.current = result.state
       applySpace(result.space)
-      if (sticking && Math.abs(result.scrollTop - element.scrollTop) >= 0.5) {
+      const before = element.scrollTop
+      if (sticking) {
+        // 每帧都写、每帧都记：这样 writtenRef 永远是「我们最后一次摆的位置」，
+        // 下一帧的自查才有基准（占位收缩时浏览器会夹一次 scrollTop）。
         element.scrollTop = result.scrollTop
         writtenRef.current = element.scrollTop
       }
+      const moved = element.scrollTop - before
+      if (Math.abs(moved) >= 0.5) lastMoveRef.current = { delta: moved, source: 'loop' }
+      probeTick({
+        top: Math.round(element.scrollTop),
+        content: Math.round(contentHeight),
+        space: Math.round(result.space),
+        vel: Math.round(result.state.velocity),
+        pace: Math.round(result.pace),
+        stick: sticking ? 1 : 0,
+        moved: Math.round(moved),
+      })
+      probeHud([
+        'top ' + Math.round(element.scrollTop) + '  content ' + Math.round(contentHeight) + '  tail ' + Math.round(result.space),
+        'vel ' + Math.round(result.state.velocity) + '  pace ' + Math.round(result.pace) + '  stick ' + (sticking ? 1 : 0),
+        'Δ ' + Math.round(moved) + ' (' + lastMoveRef.current.source + ')',
+      ])
       if (result.idle) {
         if (spaceRef.current > 0.5) applySpace(0)
         return
@@ -201,6 +246,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   }, [revision, follow, settle])
 
   useIsoLayoutEffect(() => {
+    probeInstall()
     const container = containerRef.current
     if (container === null) return
     const content = contentRef.current
@@ -226,10 +272,20 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       const currentTop = owner.scrollTop
       const delta = currentTop - lastTopRef.current
       lastTopRef.current = currentTop
-      // 自己写进去的位移不算用户操作：浏览器可能在我们的写入之后再夹一次
-      // scrollTop（占位变化时），差值会有一两像素的余量。
-      if (tweenRef.current !== null) return
-      if (writtenRef.current >= 0 && Math.abs(currentTop - writtenRef.current) < 4) return
+      // 只把自己写进去的那个值当成「程序位移」；不能因为跟随循环正在跑就忽略
+      // 所有滚动事件——那会把用户的上滚吞掉，然后他被强行拉回底部（看起来就是
+      // 「自己滚着滚着突然往上一跳」）。
+      const ours = writtenRef.current >= 0 && Math.abs(currentTop - writtenRef.current) < 4
+      probeLog('scroll', {
+        top: Math.round(currentTop),
+        delta: Math.round(delta),
+        ours: ours ? 1 : 0,
+        stick: stickRef.current ? 1 : 0,
+        h: Math.round(owner.scrollHeight),
+      })
+      if (ours) return
+      lastMoveRef.current = { delta, source: 'user' }
+      userScrollAtRef.current = Date.now()
 
       const wasSticking = stickRef.current
       // 距离要按真正滚动的那一层算。余量现在是**布局里的占位**而不是滚动偏移，
@@ -248,6 +304,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
         programmaticUntilRef.current = 0
         cancelTween()
         // 停止跟随时把占位收掉：否则它会一直留在末尾，内容凭空比底部高出一截。
+        // 占位在内容之后，收掉它不影响用户正在看的那一段。
         applySpace(0)
         setStick(false)
       }
@@ -255,8 +312,44 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
 
     owner.addEventListener('scroll', onScroll, { passive: true })
 
+    // 滚轮/触摸一旦朝上，立刻让位：等 scroll 事件再判断会晚一帧，
+    // 那一帧里跟随循环可能已经把他拉回去了。
+    const onWheel = (event: WheelEvent): void => {
+      if (event.deltaY >= 0) return
+      probeLog('unstick', { by: 'wheel', delta: Math.round(event.deltaY) })
+      if (stickRef.current === false) return
+      programmaticUntilRef.current = Date.now() + 200
+      cancelTween()
+      applySpace(0)
+      setStick(false)
+    }
+    const onTouchStart = (): void => {
+      probeLog('unstick', { by: 'touch' })
+      if (stickRef.current === false) return
+      programmaticUntilRef.current = Date.now() + 200
+      cancelTween()
+      applySpace(0)
+      setStick(false)
+    }
+    owner.addEventListener('wheel', onWheel, { passive: true })
+    owner.addEventListener('touchstart', onTouchStart, { passive: true })
+
     const mutation = typeof MutationObserver === 'function'
-      ? new MutationObserver(() => scheduleFollow())
+      ? new MutationObserver((records) => {
+          if (probeLogged()) {
+            const flow = contentRef.current
+            const rows = flow === null ? null : flow.querySelectorAll('.caui-row')
+            const lastRow = rows === null || rows.length === 0 ? null : (rows[rows.length - 1] ?? null)
+            probeLog('mut', {
+              n: records.length,
+              h: Math.round(owner.scrollHeight),
+              top: Math.round(owner.scrollTop),
+              rows: rows === null ? null : rows.length,
+              lastH: lastRow === null ? null : Math.round(lastRow.getBoundingClientRect().height),
+            })
+          }
+          scheduleFollow()
+        })
       : null
     mutation?.observe(content ?? container, {
       childList: true,
@@ -274,6 +367,8 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
 
     return () => {
       owner.removeEventListener('scroll', onScroll)
+      owner.removeEventListener('wheel', onWheel)
+      owner.removeEventListener('touchstart', onTouchStart)
       cancelTween()
       mutation?.disconnect()
       resize?.disconnect()

@@ -189,6 +189,43 @@ src/client/session/
 
 配置写错不会白屏：缺键 / 类型不对 / 枚举越界的那个叶子退回 `DEFAULT_MOTION`（见 `motion-config.ts`）并 `console.warn` 一次，其余照常。
 
+## 滚动探针（排查「莫名其妙跳一下」）
+
+滚动跟随的判定都在 `scroll-follow.ts` / `ScrollToBottom.tsx` 里，肉眼看不清，所以内置了一个探针：
+
+**打开**（二选一）：
+
+- 地址栏加 hash：`http://127.0.0.1:11778/#caui-probe`，刷新；
+- 或控制台 `localStorage.setItem('caui:probe','1')` 后刷新；关掉是 `localStorage.removeItem('caui:probe')`。
+
+右下角会出现一个 HUD（`top / content / tail / vel / pace / stick / Δ fps`），记录是**环形缓冲**（6000 条），关掉探针即停止。
+
+**取数据**（控制台）：
+
+```js
+__cauiProbe.tail(60)    // 最近 60 条，JSON
+__cauiProbe.dump()      // 全量
+__cauiProbe.save()      // 下载 caui-probe.json
+__cauiProbe.clear()     // 清空（复现前先清一次）
+__cauiProbe.scrollUp(200)  // 不用真的滚，直接模拟上滚 200px
+__cauiProbe.off()       // 停止记录
+```
+
+**记录的事件**：
+
+| `kind` | 含义 |
+| --- | --- |
+| `tick` | 跟随循环每帧（节流 50ms）：`top / content / space / vel / pace / stick / moved` |
+| `scroll` | 每个 scroll 事件：`top / delta / ours`（是否我们写的）`/ stick / h` |
+| `external` | 每帧自查发现「位置被别人动过」：`top / delta / stick`（不依赖 scroll 事件，事件被推迟时也能抓到） |
+| `space` | 尾部占位（余量）变化：`from / to` |
+| `mut` | 消息流 DOM 变更：`n / h / top / rows / lastH` |
+| `unstick` | 停止跟随的原因：`by: wheel｜touch` |
+
+**复现一次跳动的流程**：`__cauiProbe.clear()` → 正常用（滚轮、拖选、切会话）→ 跳动发生时立刻 `__cauiProbe.save()`，把 JSON 发我；或者直接贴 `__cauiProbe.tail(60)`。
+
+探针状态挂在 `window.__cauiProbeState` 而不是模块作用域——插件 bundle 被宿主求值不止一次时，模块级变量会分裂成两份（HUD 有数、`tail()` 读出 0）。
+
 ## 开发
 
 ```powershell
