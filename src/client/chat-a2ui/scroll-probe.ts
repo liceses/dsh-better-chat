@@ -210,17 +210,28 @@ export function probeInstall (): void {
  */
 export function checkEntries (entries: ProbeEntry[]): {
   pass: boolean
-  move: { max: number; limit: number; ok: boolean }
-  settle: { gap: number; ok: boolean }
+  evidence: { ticks: number; enough: boolean }
+  move: { maxVelocity: number; limit: number; ok: boolean }
+  settle: { gap: number | null; ok: boolean }
   quiet: { unstick: number; violated: number; ok: boolean }
   restick: { resticks: number; suspicious: number; ok: boolean }
   errors: number
 } {
-  const MOVE_LIMIT = 44
+  // 判据是**速度**而不是每帧像素：30fps 下走 78px 与 60fps 下走 39px 是同一个
+  // 速度，都合法；按每帧像素判会把掉帧误判成缺陷。
+  const MAX_SPEED = 2600
   const ticks = entries.filter(entry => entry.kind === 'tick')
-  const maxMove = ticks.reduce((max, entry) => Math.max(max, Math.abs(Number(entry.moved ?? 0))), 0)
-  const lastTick = ticks[ticks.length - 1]
-  const gap = lastTick === undefined ? 0 : Math.abs(Number(lastTick.target ?? 0) - Number(lastTick.top ?? 0))
+  const maxVelocity = ticks.reduce((max, entry) => {
+    const dt = Number(entry.dt ?? 0)
+    const moved = Math.abs(Number(entry.moved ?? 0))
+    if (dt <= 0) return max
+    return Math.max(max, (moved / dt) * 1000)
+  }, 0)
+  const limit = MAX_SPEED * 1.05
+  // 落点只看「最后一次贴底时的帧」：用户停在上面时 target 和 top 本来就差一截。
+  const stickingTicks = ticks.filter(entry => Number(entry.stick ?? 1) === 1)
+  const lastTick = stickingTicks[stickingTicks.length - 1]
+  const gap = lastTick === undefined ? null : Math.abs(Number(lastTick.target ?? 0) - Number(lastTick.top ?? 0))
 
   let violated = 0
   let unsticks = 0
@@ -242,15 +253,21 @@ export function checkEntries (entries: ProbeEntry[]): {
     if (entry.kind !== 'scroll' || previous.kind !== 'scroll') continue
     if (previous.stick === 0 && entry.stick === 1) {
       resticks += 1
-      if (Number(entry.delta ?? 0) <= 2) suspicious += 1
+      // 合规的重新吸附：发生在「用户滚到我们最后一次写入位置的下方」之后。
+      const written = Number(entry.w ?? entry.top ?? 0)
+      if (Number(entry.top ?? 0) <= written + 2) suspicious += 1
     }
   }
 
-  const pass = maxMove <= MOVE_LIMIT && gap <= 2 && violated === 0 && suspicious === 0
+  // 证据不足不算通过：空日志 / 没几帧的日志给出 pass 是假绿。
+  const enough = ticks.length >= 10
+  const settleOk = gap === null ? false : gap <= 2
+  const pass = enough && maxVelocity <= limit && settleOk && violated === 0 && suspicious === 0
   return {
     pass,
-    move: { max: Math.round(maxMove), limit: MOVE_LIMIT, ok: maxMove <= MOVE_LIMIT },
-    settle: { gap: Math.round(gap), ok: gap <= 2 },
+    evidence: { ticks: ticks.length, enough },
+    move: { maxVelocity: Math.round(maxVelocity), limit, ok: maxVelocity <= limit },
+    settle: { gap: gap === null ? null : Math.round(gap), ok: settleOk },
     quiet: { unstick: unsticks, violated, ok: violated === 0 },
     restick: { resticks, suspicious, ok: suspicious === 0 },
     errors: 0,

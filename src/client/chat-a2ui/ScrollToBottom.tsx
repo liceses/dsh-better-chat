@@ -71,6 +71,8 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   const tweenRef = useRef<number | null>(null)
   /** 弹簧状态（位置 / 速度 / 余量）。 */
   const followRef = useRef<FollowState | null>(null)
+  /** 上一帧时刻（只用于探针记录 dt）。 */
+  const lastTickAtRef = useRef(0)
   /** 上一次由程序写进去的 scrollTop：用来区分「我们的位移」和「用户上滚」。 */
   const writtenRef = useRef(-1)
   /** 用户最近一次自己滚动的时刻：避免在他滚动时做「直接落位」之类的动作。 */
@@ -175,12 +177,26 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
         }
       }
 
-      if (!stickRef.current) return
+      if (!stickRef.current) {
+        // 不跟随时也留一条记录：验收要能证明「上滚之后确实有帧在跑、且没写」。
+        probeTick({
+          top: Math.round(element.scrollTop),
+          content: Math.round(contentHeight),
+          margin: 0,
+          target: Math.round(Math.max(0, element.scrollHeight - viewport)),
+          rate: 0,
+          moved: 0,
+          stick: 0,
+        })
+        return
+      }
 
       const state = followRef.current ?? createFollowState(at, contentHeight, element.scrollTop)
       const result = stepFollow(state, { height: contentHeight, viewport, at, config: MOTION.scroll })
       followRef.current = result.state
 
+      const frameMs = lastTickAtRef.current === 0 ? 0 : Math.max(0, at - lastTickAtRef.current)
+      lastTickAtRef.current = at
       const before = element.scrollTop
       element.scrollTop = result.position
       writtenRef.current = element.scrollTop
@@ -193,6 +209,8 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
         target: Math.round(result.target),
         rate: Math.round(result.rate),
         moved: Math.round(moved),
+        dt: Math.round(frameMs),
+        stick: 1,
       })
       probeHud([
         'top ' + Math.round(element.scrollTop) + '  content ' + Math.round(contentHeight) + '  margin ' + Math.round(result.margin),
@@ -262,6 +280,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       probeLog('scroll', {
         top: Math.round(currentTop),
         delta: Math.round(delta),
+        w: Math.round(writtenRef.current),
         ours: ours ? 1 : 0,
         stick: stickRef.current ? 1 : 0,
         h: Math.round(owner.scrollHeight),
@@ -272,10 +291,11 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
 
       const wasSticking = stickRef.current
       const distance = owner.scrollHeight - currentTop - owner.clientHeight
-      // 只有「用户自己往下滚回底部」才重新吸附。我们清占位时浏览器会夹一次
-      // scrollTop，那会让距离瞬间变 0；如果按距离吸附，就会立刻又被拉到底部，
-      // 用户看到的就是「滚一下、被弹回去」。
-      if (distance <= STICK_THRESHOLD && delta > 2) {
+      // 只有「用户自己往下滚回底部」才重新吸附。判据不是事件之间的 delta
+      // （每帧自查会把它抹成 0），而是「当前位置在我们最后一次写入的下方」：
+      // 浏览器夹边只会往上夹，用户往下滚才会越过 writtenRef。
+      const movedDownByUser = currentTop > writtenRef.current + 2
+      if (distance <= STICK_THRESHOLD && movedDownByUser) {
         programmaticUntilRef.current = 0
         setStick(true)
         if (!wasSticking) settle()
@@ -286,6 +306,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       // 只有 scrollTop 真的减少才算用户上滚。流式内容变高时，浏览器滚动锚定
       // 会把 scrollTop 往下推（delta > 0），那不是用户意图，不能停止跟随。
       if (delta < -2) {
+        probeLog('unstick', { by: 'scroll', delta: Math.round(delta) })
         programmaticUntilRef.current = 0
         cancelTween()
         setStick(false)
