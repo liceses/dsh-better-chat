@@ -225,9 +225,19 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
     const content = contentRef.current
     const owner = resolveOwner(container, forceInner)
     if (owner === null) return
-    ownerRef.current = owner
-    lastTopRef.current = owner.scrollTop
-    setOuter(owner !== container)
+    // 只有「滚动容器真的换了」才重置基准。这个 effect 在每次 revision
+    // （新消息 / 新 token / 新行）变化时都会重跑——如果每次都把 lastTopRef
+    // 改成当前位置，就会把用户刚刚的上滚抹平：external 自查算出 delta=0，
+    // 于是不认账、继续把他拽回底部。那正是「自己滚着滚着往上跳一下」。
+    if (ownerRef.current !== owner) {
+      ownerRef.current = owner
+      lastTopRef.current = owner.scrollTop
+      // 基准必须是一个真实坐标，不能用 -1 这种哨兵：挂载时 revision effect
+      // 可能已经先写过一次，这里再置 -1 会让自查永远跳过（expectedTop >= 0 不成立）。
+      writtenRef.current = owner.scrollTop
+      followRef.current = null
+      setOuter(owner !== container)
+    }
 
     const scheduleFollow = () => {
       if (typeof requestAnimationFrame !== 'function') {
