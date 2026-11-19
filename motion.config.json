@@ -173,14 +173,6 @@
     "clipMin": 0.12,
     "clipMax": 0.95
   },
-  "scramble": {
-    "duration": 0.8,
-    "speed": 0.04
-  },
-  "borderTrail": {
-    "size": 110,
-    "duration": 3.4
-  },
   "progressiveBlur": {
     "blurLayers": 6,
     "blurIntensity": 0.32

@@ -25,7 +25,6 @@ describe('motion.config.json 与加载器', () => {
     expect(DEFAULT_MOTION.roles.affordance.hover).toEqual({ duration: 'xs', ease: 'out' })
     expect(DEFAULT_MOTION.textEffect.emptyTitle).toEqual({ per: 'char', preset: 'blur', delay: 0.1, speedReveal: 1, speedSegment: 1 })
     expect(DEFAULT_MOTION.animatedGroup.suggestions).toEqual({ preset: 'blur-slide', stagger: 0.1 })
-    expect(DEFAULT_MOTION.scramble).toEqual({ duration: 0.8, speed: 0.04 })
     expect(DEFAULT_MOTION.progressiveBlur).toEqual({ blurLayers: 6, blurIntensity: 0.32 })
   })
 
@@ -85,6 +84,28 @@ describe('motion.config.json 与加载器', () => {
     expect(rowEnter.initial).toEqual({ opacity: MOTION.roles.message.enter.opacity, y: MOTION.roles.message.enter.y })
     expect(rowExit.y).toBe(MOTION.roles.message.exit.y)
     expect(rowExit.opacity).toBe(MOTION.roles.message.exit.opacity)
+  })
+
+  it('没有「写了不生效」的配置分组：每个顶层分组都被读过', async () => {
+    const { readFileSync, readdirSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const raw = JSON.parse(readFileSync(join(ROOT, 'motion.config.json'), 'utf8')) as Record<string, unknown>
+    const dir = join(ROOT, 'src')
+    const files: string[] = []
+    const walk = (path: string): void => {
+      for (const entry of readdirSync(path, { withFileTypes: true })) {
+        const full = join(path, entry.name)
+        if (entry.isDirectory()) walk(full)
+        else if (/\.(ts|tsx)$/.test(entry.name) && !/motion(-[a-z]+)?\.ts$/.test(entry.name)) files.push(full)
+      }
+    }
+    walk(dir)
+    const source = files.map(file => readFileSync(file, 'utf8')).join(String.fromCharCode(10))
+    // tokens / roles 通过 hooks 间接读取，其余分组必须出现 MOTION.<分组> 的引用
+    for (const section of Object.keys(raw)) {
+      if (section === 'tokens' || section === 'roles') continue
+      expect(source.includes('MOTION.' + section), section + ' 没有任何读取方').toBe(true)
+    }
   })
 
   it('配置文件在仓库根，且没有被塞进发布清单', async () => {

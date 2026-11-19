@@ -94,15 +94,7 @@ export interface MotionConfig {
   roles: MotionRoles
   textEffect: { emptyTitle: TextEffectSpec; blankTitle: TextEffectSpec }
   animatedGroup: { suggestions: { preset: AnimatedGroupPresetName; stagger: number } }
-  shimmer: {
-    duration: number
-    spread: number
-    zDistance: number
-    xDistance: number
-    yDistance: number
-    scaleDistance: number
-    rotateYDistance: number
-  }
+
   /** 贴底跟随：限速跟随 + 速度相关的底部余量。 */
   scroll: {
     /** 生成期间的最低底部余量（px）。 */
@@ -121,6 +113,16 @@ export interface MotionConfig {
     releaseTau: number
     instantAbove: number
   }
+  /** 文字微光（chat-mode 的「正在生成…」）：周期、扩散、各向位移与缩放。 */
+  shimmer: {
+    duration: number
+    spread: number
+    zDistance: number
+    xDistance: number
+    yDistance: number
+    scaleDistance: number
+    rotateYDistance: number
+  }
   /** 流式块的高度补充：每帧最多处理多少字、补间速度与时长上下限。 */
   stream: {
     maxChars: number
@@ -128,8 +130,7 @@ export interface MotionConfig {
     clipMin: number
     clipMax: number
   }
-  scramble: { duration: number; speed: number }
-  borderTrail: { size: number; duration: number }
+
   progressiveBlur: { blurLayers: number; blurIntensity: number }
 }
 
@@ -163,15 +164,7 @@ export const DEFAULT_MOTION: MotionConfig = {
     blankTitle: { per: 'char', preset: 'blur', delay: 0.08, speedReveal: 1, speedSegment: 1 },
   },
   animatedGroup: { suggestions: { preset: 'blur-slide', stagger: 0.1 } },
-  shimmer: {
-    duration: 1,
-    spread: 1,
-    zDistance: 10,
-    xDistance: 2,
-    yDistance: -2,
-    scaleDistance: 1.1,
-    rotateYDistance: 10,
-  },
+
   scroll: {
     minMargin: 120,
     maxMarginRatio: 0.35,
@@ -184,9 +177,17 @@ export const DEFAULT_MOTION: MotionConfig = {
     releaseTau: 0.45,
     instantAbove: 1600,
   },
+  shimmer: {
+    duration: 1,
+    spread: 1,
+    zDistance: 10,
+    xDistance: 2,
+    yDistance: -2,
+    scaleDistance: 1.1,
+    rotateYDistance: 10,
+  },
   stream: { maxChars: 140, clipSpeed: 1000, clipMin: 0.12, clipMax: 0.95 },
-  scramble: { duration: 0.8, speed: 0.04 },
-  borderTrail: { size: 110, duration: 3.4 },
+
   progressiveBlur: { blurLayers: 6, blurIntensity: 0.32 },
 }
 
@@ -283,6 +284,7 @@ for (const key of ['emptyTitle', 'blankTitle'] as const) {
 }
 enm('animatedGroup.suggestions.preset', GROUP_PRESETS)
 num('animatedGroup.suggestions.stagger', 0, 1)
+
 num('shimmer.duration', 0.1, 6)
 num('shimmer.spread', 0.1, 6)
 num('shimmer.zDistance', -60, 60)
@@ -304,10 +306,6 @@ num('stream.maxChars', 20, 600, true)
 num('stream.clipSpeed', 100, 8000)
 num('stream.clipMin', 0.02, 1)
 num('stream.clipMax', 0.05, 3)
-num('scramble.duration', 0, 5)
-num('scramble.speed', 0.005, 0.5)
-num('borderTrail.size', 8, 400)
-num('borderTrail.duration', 0.2, 20)
 num('progressiveBlur.blurLayers', 2, 24, true)
 num('progressiveBlur.blurIntensity', 0, 2)
 

@@ -194,8 +194,8 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
       </div>
       {forceInner && (
         <>
-          <ProgressiveBlur direction="top" className={cls.flowBlurTop} blurLayers={6} blurIntensity={0.32} />
-          <ProgressiveBlur direction="bottom" className={cls.flowBlurBottom} blurLayers={6} blurIntensity={0.32} />
+          <ProgressiveBlur direction="top" className={cls.flowBlurTop} blurLayers={MOTION.progressiveBlur.blurLayers} blurIntensity={MOTION.progressiveBlur.blurIntensity} />
+          <ProgressiveBlur direction="bottom" className={cls.flowBlurBottom} blurLayers={MOTION.progressiveBlur.blurLayers} blurIntensity={MOTION.progressiveBlur.blurIntensity} />
         </>
       )}
     </div>
