@@ -11,6 +11,8 @@ import DOMPurify from 'dompurify'
 import { cls } from './classes'
 import { MOTION, clipSeconds } from './motion-config'
 import { reducedMotion } from './motion'
+import { expandRole } from './motion-roles'
+import { useStream } from './motion-hooks'
 import { cx } from './util'
 
 /** 允许出现在 href/src 上的协议白名单。 */
@@ -170,7 +172,11 @@ export const STREAM_CHAR_CLASS = 'caui-md-stream-char'
  * 之前的字符保持原样（已经清晰），新字符从模糊到清晰，视觉上就是文字在末尾渐渐显影。
  * 不新增 DOM 结构上限——count 由 motion.config.json 的 stream.maxChars 夹住。
  */
-function animateStreamTail (host: HTMLElement, count: number): void {
+function animateStreamTail (
+  host: HTMLElement,
+  count: number,
+  staggerSeconds: number = expandRole('text.stream').stagger,
+): void {
   if (count <= 0) return
   const walker = host.ownerDocument.createTreeWalker(host, NodeFilter.SHOW_TEXT)
   const nodes: Text[] = []
@@ -194,7 +200,8 @@ function animateStreamTail (host: HTMLElement, count: number): void {
   }
   ranges.reverse()
 
-  const stagger = MOTION.tokens.stagger.tight
+  // 错峰由调用方传入（角色 text.stream 的 stagger）；模块函数不读 hook。
+  const stagger = staggerSeconds
   let charIndex = 0
   for (const range of ranges) {
     const parent = range.node.parentNode
@@ -233,6 +240,8 @@ export interface MarkdownProps {
 
 /** 已消毒的 Markdown 视图；只在 text / streaming 变化时重新解析。 */
 export const Markdown = memo(function Markdown ({ text, streaming = false, tail = false, className }: MarkdownProps) {
+  // 流式逐字的时长/模糊/错峰来自角色 text.stream（reduced 档下 blur 归零）。
+  const stream = useStream('text.stream')
   const hostRef = useRef<HTMLDivElement | null>(null)
   /** 上一帧渲染出来的纯文本长度：用来算「这一帧新长出来多少字」。 */
   const seenRef = useRef(0)
@@ -267,8 +276,8 @@ export const Markdown = memo(function Markdown ({ text, streaming = false, tail 
 
     const grown = grew ? total - previousTotal : total
     if (grown <= 0) return
-    animateStreamTail(host, Math.min(grown, MOTION.stream.maxChars))
-  }, [html, streaming, tail, text])
+    animateStreamTail(host, Math.min(grown, MOTION.stream.maxChars), stream.stagger)
+  }, [html, streaming, tail, text, stream.stagger])
 
   // 高度补间：宿主一次可能提交几百像素的正文（实测单批 +531px），直接铺开就是
   // 整块内容瞬间顶上来。这里让这一块的高度先停住、再在 0.2s 内长到目标高度，
@@ -294,8 +303,8 @@ export const Markdown = memo(function Markdown ({ text, streaming = false, tail 
   }, [html, clipActive, clip])
 
   const style = {
-    '--caui-stream-duration': MOTION.tokens.dur.lg + 's',
-    '--caui-stream-blur': MOTION.tokens.blur.stream + 'px',
+    '--caui-stream-duration': stream.duration + 's',
+    '--caui-stream-blur': stream.blur + 'px',
   } as CSSProperties
 
   const clipStyle = clip === null

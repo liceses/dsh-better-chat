@@ -1,12 +1,6 @@
 {
-  "cap": 9,
+  "cap": 8,
   "entries": [
-    {
-      "file": "src/client/chat-a2ui/ChatImage.tsx",
-      "snippet": "transition={{ duration: reducedMotion() ? 0 : 0.16, ease: 'easeOut' }}",
-      "why": "B1 存量（待迁移到 motion-roles）",
-      "since": "2026-11-19"
-    },
     {
       "file": "src/client/chat-a2ui/motion-primitives/vendor/AnimatedGroup.tsx",
       "snippet": "zoom: { hidden: { scale: 0.5 }, visible: { scale: 1, transition: { type: 'spring', stiffness: 300, damping: 20 } } },",

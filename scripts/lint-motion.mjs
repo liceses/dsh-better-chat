@@ -21,7 +21,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const SRC = join(ROOT, 'src', 'client', 'chat-a2ui')
 const ALLOWLIST = join(ROOT, 'motion-allowlist.json')
 
-const SKIP = /(^|\/)(motion(-config|-roles|-primitives)?\.ts|style(-p06)?\.ts|scroll-follow\.ts|scroll-probe\.ts)$/
+const SKIP = /(^|\/)(motion(-[a-z]+)?\.ts|style(-p06)?\.ts|scroll-follow\.ts|scroll-probe\.ts)$/
 const KEYS = /(\bduration\b|\bdelay\b|\bease\b|\beasing\b|\bstiffness\b|\bdamping\b|\bmass\b)\s*:/
 
 function files (dir) {

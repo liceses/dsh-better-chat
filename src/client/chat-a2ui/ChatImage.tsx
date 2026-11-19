@@ -12,7 +12,8 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { cls } from './classes'
 import { cx, formatBytes } from './util'
-import { reducedMotion, spring } from './motion'
+import { spring } from './motion'
+import { useEnter, useExit } from './motion-hooks'
 import type { ImageAttachmentRef } from './types'
 
 export interface ChatImageProps {
@@ -32,6 +33,9 @@ export function ChatImage ({ attachment, loadImage, alt }: ChatImageProps) {
   const [src, setSrc] = useState<string | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const closeRef = useRef<HTMLButtonElement | null>(null)
+  // 灯箱开合来自角色 dialog.open：淡入 + 轻微放大，reduced 档自动收敛成纯淡入。
+  const dialog = useEnter('dialog.open')
+  const dialogExit = useExit('dialog.open')
 
   // 宿主原生 imageUrl 返回 Promise（要先向附件服务换地址），测试替身也可以同步返回。
   // 两条路径都收敛到 src/failed，绝不让 Promise 本身进入 img.src。
@@ -180,10 +184,10 @@ export function ChatImage ({ attachment, loadImage, alt }: ChatImageProps) {
                 role="dialog"
                 aria-modal="true"
                 aria-label={'图片预览：' + label}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: reducedMotion() ? 0 : 0.16, ease: 'easeOut' }}
+                initial={dialog.initial}
+                animate={dialog.animate}
+                exit={dialogExit}
+                transition={dialog.transition}
                 onClick={close}
               >
                 <motion.img

@@ -226,6 +226,39 @@ __cauiProbe.off()       // 停止记录
 
 探针状态挂在 `window.__cauiProbeState` 而不是模块作用域——插件 bundle 被宿主求值不止一次时，模块级变量会分裂成两份（HUD 有数、`tail()` 读出 0）。
 
+## 动效体系
+
+组件**不许**自己写时长/曲线/弹簧参数。三层结构：
+
+| 层 | 文件 | 谁改 |
+| --- | --- | --- |
+| **令牌 tokens** | `motion.config.json` → `tokens` | 想整体调快/调慢、换缓动曲线时改这里 |
+| **角色 roles** | `motion.config.json` → `roles` | 想改「消息进场是弹簧还是淡入」时改这里 |
+| **原语 primitives** | `motion-hooks.ts` | 很少改；新交互类型才加 hook |
+
+组件这样消费：
+
+```tsx
+const enter = useEnter('message.enter')   // { initial, animate, transition }
+const exit = useExit('message.exit')
+const collapse = useCollapse('panel.collapse')
+const stream = useStream('text.stream')   // 流式逐字的 时长 / 模糊 / 错峰
+```
+
+**动效档位 full / reduced**：语义在 `motion-roles.ts` 统一实现——位移、缩放、模糊归零（前庭刺激），不透明度与颜色保留但压到 `tokens.dur.reduced`；`system.spin` / `system.blink` 保留，它们是状态指示。
+
+**改观感的正确姿势**：改 `motion.config.json` → `npm run build` → 刷新。改完 `npm test` 会核对「每个角色引用的令牌都存在」「reduced 语义没破」。
+
+**新增一个角色**：在 `roles` 加条目（只引用令牌名）→ 在 `ROLE_IDS` 补名字 → `npm test` 会告诉你还有哪没对齐。
+
+### 门禁
+
+```powershell
+npm run lint:motion    # 组件里出现手写 duration / ease / stiffness 就失败
+```
+
+存量写在 `motion-allowlist.json`：**只许减**（条目数有上限，且每条必须仍能命中；失效条目也报错）。当前 8 条，都在 vendor 组件与三个未迁移的动效原语里。
+
 ## 滚动跟随的验收标准
 
 改这个模块之前先确认「改完算不算好」。A 组自动守，B 组在浏览器里一行判定（`__cauiProbe.check()` 读同一份日志、按同一组阈值给结论）。

@@ -10,7 +10,7 @@ import type { ChatViewProps } from './types'
 import { ChatRow } from './ChatRow'
 import { ScrollToBottomButton, useStickToBottom } from './ScrollToBottom'
 import { useChatStyles } from './style'
-import { rowEnterStart, rowEntered, rowExitTarget, spring } from './motion'
+import { useEnter, useExit } from './motion-hooks'
 import { MOTION } from './motion-config'
 import { useMotionLevel } from './motion-preference'
 import { AnimatedGroup } from './motion-primitives/vendor/AnimatedGroup'
@@ -126,7 +126,10 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
     forceInner,
   })
 
-  const rowTransition = animated ? spring : { duration: 0 }
+  // 行动效来自角色 message.enter / message.exit：full 档走弹簧，
+  // reduced 档自动收敛成一次短淡入（语义在 motion-roles.ts 里统一实现）。
+  const enter = useEnter('message.enter')
+  const exit = useExit('message.exit')
 
   return (
     <div
@@ -167,10 +170,10 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
                   // 生成中不做 layout 弹簧：那一层会对同一段高度变化再做一次
                   // scale 修正，和块高度补间叠加，产生二次位移。
                   layout={animated && !running}
-                  initial={animated ? rowEnterStart : false}
-                  animate={rowEntered}
-                  exit={animated ? rowExitTarget : { opacity: 0 }}
-                  transition={rowTransition}
+                  initial={enter.initial}
+                  animate={enter.animate}
+                  exit={exit}
+                  transition={enter.transition}
                 >
                   <RowErrorBoundary>
                     <ChatRow
