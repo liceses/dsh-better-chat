@@ -21,7 +21,8 @@
     "build": "node scripts/build.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "sim:scroll": "node --experimental-strip-types scripts/scroll-sim.mjs"
+    "sim:scroll": "node --experimental-strip-types scripts/scroll-sim.mjs",
+    "lint:motion": "node scripts/lint-motion.mjs"
   },
   "dsh": {
     "bundle": {

@@ -392,15 +392,15 @@ export const CHAT_CSS = `
 
 .caui-md-clip-animated {
   transition-property: height;
-  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  transition-timing-function: var(--caui-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
 /* 流式尾巴：逐字模糊渐入。时长与模糊半径来自 motion.config.json 的 stream.*，
    由 Markdown 组件内联成 --caui-stream-* 两个变量。 */
 .caui-md-stream-char {
   animation-name: caui-md-stream-in;
-  animation-duration: var(--caui-stream-duration, 0.26s);
-  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-duration: var(--caui-stream-duration, 0.42s);
+  animation-timing-function: var(--caui-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
   animation-fill-mode: both;
 }
 

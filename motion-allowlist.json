@@ -1,0 +1,59 @@
+{
+  "cap": 9,
+  "entries": [
+    {
+      "file": "src/client/chat-a2ui/ChatImage.tsx",
+      "snippet": "transition={{ duration: reducedMotion() ? 0 : 0.16, ease: 'easeOut' }}",
+      "why": "B1 存量（待迁移到 motion-roles）",
+      "since": "2026-11-19"
+    },
+    {
+      "file": "src/client/chat-a2ui/motion-primitives/vendor/AnimatedGroup.tsx",
+      "snippet": "zoom: { hidden: { scale: 0.5 }, visible: { scale: 1, transition: { type: 'spring', stiffness: 300, damping: 20 } } },",
+      "why": "B1 存量（待迁移到 motion-roles）",
+      "since": "2026-11-19"
+    },
+    {
+      "file": "src/client/chat-a2ui/motion-primitives/vendor/AnimatedGroup.tsx",
+      "snippet": "flip: { hidden: { rotateX: -90 }, visible: { rotateX: 0, transition: { type: 'spring', stiffness: 300, damping: 20 } } },",
+      "why": "B1 存量（待迁移到 motion-roles）",
+      "since": "2026-11-19"
+    },
+    {
+      "file": "src/client/chat-a2ui/motion-primitives/vendor/AnimatedGroup.tsx",
+      "snippet": "bounce: { hidden: { y: -50 }, visible: { y: 0, transition: { type: 'spring', stiffness: 400, damping: 10 } } },",
+      "why": "B1 存量（待迁移到 motion-roles）",
+      "since": "2026-11-19"
+    },
+    {
+      "file": "src/client/chat-a2ui/motion-primitives/vendor/AnimatedGroup.tsx",
+      "snippet": "rotate: { hidden: { rotate: -180 }, visible: { rotate: 0, transition: { type: 'spring', stiffness: 200, damping: 15 } } },",
+      "why": "B1 存量（待迁移到 motion-roles）",
+      "since": "2026-11-19"
+    },
+    {
+      "file": "src/client/chat-a2ui/motion-primitives/vendor/AnimatedGroup.tsx",
+      "snippet": "swing: { hidden: { rotate: -10 }, visible: { rotate: 0, transition: { type: 'spring', stiffness: 300, damping: 8 } } },",
+      "why": "B1 存量（待迁移到 motion-roles）",
+      "since": "2026-11-19"
+    },
+    {
+      "file": "src/client/chat-a2ui/motion-primitives/vendor/BorderTrail.tsx",
+      "snippet": "const defaultTransition: Transition = { repeat: Infinity, duration: 5, ease: 'linear' }",
+      "why": "B1 存量（待迁移到 motion-roles）",
+      "since": "2026-11-19"
+    },
+    {
+      "file": "src/client/chat-a2ui/motion-primitives/vendor/TextEffect.tsx",
+      "snippet": "duration: baseDuration,",
+      "why": "B1 存量（待迁移到 motion-roles）",
+      "since": "2026-11-19"
+    },
+    {
+      "file": "src/client/chat-a2ui/motion-primitives/vendor/TextShimmerWave.tsx",
+      "snippet": "ease: 'easeInOut',",
+      "why": "B1 存量（待迁移到 motion-roles）",
+      "since": "2026-11-19"
+    }
+  ]
+}

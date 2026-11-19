@@ -194,7 +194,7 @@ function animateStreamTail (host: HTMLElement, count: number): void {
   }
   ranges.reverse()
 
-  const stagger = MOTION.stream.stagger
+  const stagger = MOTION.tokens.stagger.tight
   let charIndex = 0
   for (const range of ranges) {
     const parent = range.node.parentNode
@@ -294,8 +294,8 @@ export const Markdown = memo(function Markdown ({ text, streaming = false, tail 
   }, [html, clipActive, clip])
 
   const style = {
-    '--caui-stream-duration': MOTION.stream.duration + 's',
-    '--caui-stream-blur': MOTION.stream.blur + 'px',
+    '--caui-stream-duration': MOTION.tokens.dur.lg + 's',
+    '--caui-stream-blur': MOTION.tokens.blur.stream + 'px',
   } as CSSProperties
 
   const clipStyle = clip === null

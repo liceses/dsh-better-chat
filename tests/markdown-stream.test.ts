@@ -123,7 +123,7 @@ describe('流式尾巴的模糊渐入', () => {
   it('带上 --caui-stream-* 变量，动画参数来自配置', () => {
     render('一段话。', true)
     const host = container.querySelector('.caui-markdown') as HTMLElement
-    expect(host.style.getPropertyValue('--caui-stream-duration')).toBe(MOTION.stream.duration + 's')
-    expect(host.style.getPropertyValue('--caui-stream-blur')).toBe(MOTION.stream.blur + 'px')
+    expect(host.style.getPropertyValue('--caui-stream-duration')).toBe(MOTION.tokens.dur.lg + 's')
+    expect(host.style.getPropertyValue('--caui-stream-blur')).toBe(MOTION.tokens.blur.stream + 'px')
   })
 })

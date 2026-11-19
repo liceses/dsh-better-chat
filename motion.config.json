@@ -1,38 +1,121 @@
 {
-  "springs": {
-    "row": {
-      "stiffness": 420,
-      "damping": 34,
-      "mass": 0.8
+  "tokens": {
+    "springs": {
+      "soft": {
+        "stiffness": 420,
+        "damping": 34,
+        "mass": 0.8
+      }
     },
-    "layout": {
-      "stiffness": 420,
-      "damping": 34,
-      "mass": 0.8
+    "dur": {
+      "xs": 0.12,
+      "sm": 0.16,
+      "md": 0.24,
+      "lg": 0.42,
+      "reduced": 0.14
     },
-    "collapse": {
-      "stiffness": 420,
-      "damping": 34,
-      "mass": 0.8
+    "ease": {
+      "out": [
+        0.22,
+        1,
+        0.36,
+        1
+      ],
+      "linear": [
+        0,
+        0,
+        1,
+        1
+      ]
+    },
+    "dist": {
+      "sm": 6,
+      "md": 10
+    },
+    "stagger": {
+      "tight": 0.004,
+      "loose": 0.03
+    },
+    "blur": {
+      "stream": 9
+    },
+    "loop": {
+      "spin": 0.8,
+      "blink": 1.05,
+      "pulse": 1.6,
+      "orb": 5.4
     }
   },
-  "row": {
-    "enter": {
-      "opacity": 0,
-      "y": 6
+  "roles": {
+    "message": {
+      "enter": {
+        "spring": "soft",
+        "opacity": 0,
+        "y": 6
+      },
+      "exit": {
+        "duration": "sm",
+        "ease": "out",
+        "opacity": 0,
+        "y": -4
+      }
     },
-    "exit": {
-      "opacity": 0,
-      "y": -6,
-      "duration": 0.16,
-      "ease": "easeOut"
+    "panel": {
+      "collapse": {
+        "spring": "soft"
+      }
+    },
+    "drawer": {
+      "resize": {
+        "spring": "soft"
+      }
+    },
+    "dialog": {
+      "open": {
+        "duration": "sm",
+        "ease": "out",
+        "opacity": 0,
+        "scale": 0.98
+      }
+    },
+    "text": {
+      "stream": {
+        "duration": "lg",
+        "ease": "out",
+        "blur": 9,
+        "stagger": 0.004
+      }
+    },
+    "list": {
+      "item": {
+        "spring": "soft",
+        "opacity": 0,
+        "y": 4
+      }
+    },
+    "empty": {
+      "state": {
+        "duration": "md",
+        "ease": "out",
+        "opacity": 0,
+        "y": 8,
+        "stagger": 0.03
+      }
+    },
+    "affordance": {
+      "hover": {
+        "duration": "xs",
+        "ease": "out"
+      }
+    },
+    "system": {
+      "spin": {
+        "loop": "spin"
+      },
+      "blink": {
+        "loop": "blink"
+      }
     }
-  },
-  "css": {
-    "caretBlink": 1.05,
-    "pulse": 1.6,
-    "spin": 0.8,
-    "orb": 5.4
   },
   "textEffect": {
     "emptyTitle": {
@@ -78,9 +161,6 @@
     "instantAbove": 1600
   },
   "stream": {
-    "blur": 9,
-    "duration": 0.42,
-    "stagger": 0.004,
     "maxChars": 140,
     "clipSpeed": 1000,
     "clipMin": 0.12,
