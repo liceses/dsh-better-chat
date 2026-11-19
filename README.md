@@ -257,7 +257,9 @@ const stream = useStream('text.stream')   // 流式逐字的 时长 / 模糊 / �
 npm run lint:motion    # 组件里出现手写 duration / ease / stiffness 就失败
 ```
 
-存量写在 `motion-allowlist.json`：**只许减**（条目数有上限，且每条必须仍能命中；失效条目也报错）。当前 8 条，都在 vendor 组件与三个未迁移的动效原语里。
+存量写在 `motion-allowlist.json`：**只许减**（条目数有上限，且每条必须仍能命中；失效条目也报错）。B3 之后已清零（`0/0`），新代码没有任何豁免空间。
+
+CSS 侧同样走令牌：`style.ts` / `style-p06.ts` 里的过渡时长与缓动全部是 `var(--caui-dur-*)` / `var(--caui-ease-*)`，所以「改一个数，framer 与 CSS 一起变」。
 
 ## 滚动跟随的验收标准
 

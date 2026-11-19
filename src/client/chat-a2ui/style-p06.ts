@@ -189,7 +189,7 @@ export const P06_CSS = `
   background: transparent;
   color: var(--caui-muted);
   cursor: pointer;
-  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  transition: background var(--caui-dur-xs) var(--caui-ease-out), color var(--caui-dur-xs) var(--caui-ease-out), border-color var(--caui-dur-xs) var(--caui-ease-out);
 }
 
 .caui-chat-motion-toggle:hover {
@@ -223,7 +223,7 @@ export const P06_CSS = `
   color: var(--caui-fg);
   font-size: 13px;
   font-weight: 550;
-  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  transition: background var(--caui-dur-sm) var(--caui-ease-out), border-color var(--caui-dur-sm) var(--caui-ease-out), box-shadow var(--caui-dur-sm) var(--caui-ease-out);
 }
 
 .caui-chat-new:hover {
@@ -270,7 +270,7 @@ export const P06_CSS = `
   border: 1px solid transparent;
   border-radius: 12px;
   background: transparent;
-  transition: background 0.16s ease, border-color 0.16s ease;
+  transition: background var(--caui-dur-sm) var(--caui-ease-out), border-color var(--caui-dur-sm) var(--caui-ease-out);
 }
 
 .caui-chat-row:hover:not(.caui-chat-row-active) {
@@ -608,7 +608,7 @@ export const P06_CSS = `
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
   transform: rotate(45deg);
-  transition: transform 0.16s ease;
+  transition: transform var(--caui-dur-sm) var(--caui-ease-out);
 }
 
 .caui-context-summary[aria-expanded="true"] .caui-context-chevron {

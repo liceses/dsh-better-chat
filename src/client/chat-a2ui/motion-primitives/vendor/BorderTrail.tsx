@@ -10,6 +10,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
 import { cx } from '../../util'
+import { MOTION } from '../../motion-config'
 
 export interface BorderTrailProps {
   className?: string
@@ -20,7 +21,12 @@ export interface BorderTrailProps {
 }
 
 export function BorderTrail ({ className, size = 60, transition, onAnimationComplete, style }: BorderTrailProps) {
-  const defaultTransition: Transition = { repeat: Infinity, duration: 5, ease: 'linear' }
+  // 周期与缓动来自令牌：duration 用 loop.trail，linear 用 ease.linear。
+  const defaultTransition: Transition = {
+    repeat: Infinity,
+    duration: MOTION.tokens.loop.trail,
+    ease: MOTION.tokens.ease.linear,
+  }
   return (
     <div className="caui-border-trail" aria-hidden="true">
       <motion.div

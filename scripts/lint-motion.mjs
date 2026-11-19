@@ -22,7 +22,9 @@ const SRC = join(ROOT, 'src', 'client', 'chat-a2ui')
 const ALLOWLIST = join(ROOT, 'motion-allowlist.json')
 
 const SKIP = /(^|\/)(motion(-[a-z]+)?\.ts|style(-p06)?\.ts|scroll-follow\.ts|scroll-probe\.ts)$/
-const KEYS = /(\bduration\b|\bdelay\b|\bease\b|\beasing\b|\bstiffness\b|\bdamping\b|\bmass\b)\s*:/
+// 只抓「值就是字面量」的写法：duration: 0.16 / ease: 'easeOut' / stiffness: 300。
+// duration: baseDuration 这种变量、ease: tokens.ease.out 这种引用都不算。
+const KEYS = /(\bduration\b|\bdelay\b|\bease\b|\beasing\b|\bstiffness\b|\bdamping\b|\bmass\b)\s*:\s*(-?\d|'|")/
 
 function files (dir) {
   const out = []

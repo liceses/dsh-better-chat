@@ -309,7 +309,7 @@ export const CHAT_CSS = `
   color: var(--caui-muted);
   font-size: 11.5px;
   opacity: 0;
-  transition: opacity 0.16s ease;
+  transition: opacity var(--caui-dur-sm) var(--caui-ease-out);
 }
 
 .caui-row:hover .caui-assistant-footer,
@@ -339,7 +339,7 @@ export const CHAT_CSS = `
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  transition: background var(--caui-dur-xs) var(--caui-ease-out), color var(--caui-dur-xs) var(--caui-ease-out), border-color var(--caui-dur-xs) var(--caui-ease-out);
 }
 
 .caui-action-button:hover {
@@ -455,7 +455,7 @@ export const CHAT_CSS = `
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background 0.14s ease, color 0.14s ease;
+  transition: background var(--caui-dur-xs) var(--caui-ease-out), color var(--caui-dur-xs) var(--caui-ease-out);
 }
 
 .caui-reasoning-summary:hover {
@@ -474,7 +474,7 @@ export const CHAT_CSS = `
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
   transform: rotate(45deg);
-  transition: transform 0.16s ease;
+  transition: transform var(--caui-dur-sm) var(--caui-ease-out);
 }
 
 .caui-reasoning-summary[data-open="true"]::after {
@@ -542,7 +542,7 @@ export const CHAT_CSS = `
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  transition: background 0.14s ease;
+  transition: background var(--caui-dur-xs) var(--caui-ease-out);
 }
 
 .caui-tool-header:hover {
@@ -632,7 +632,7 @@ export const CHAT_CSS = `
   width: 12px;
   height: 12px;
   color: var(--caui-muted);
-  transition: transform 0.16s ease;
+  transition: transform var(--caui-dur-sm) var(--caui-ease-out);
 }
 
 .caui-tool-chevron[data-open="true"] {
@@ -721,7 +721,7 @@ export const CHAT_CSS = `
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  transition: background var(--caui-dur-xs) var(--caui-ease-out), color var(--caui-dur-xs) var(--caui-ease-out), border-color var(--caui-dur-xs) var(--caui-ease-out);
 }
 
 .caui-branch-button:hover:not(:disabled) {
@@ -783,8 +783,8 @@ export const CHAT_CSS = `
   pointer-events: none;
   visibility: hidden;
   transform: translateY(4px);
-  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease,
-    color 0.14s ease;
+  transition: opacity var(--caui-dur-sm) var(--caui-ease-out), transform var(--caui-dur-sm) var(--caui-ease-out), visibility var(--caui-dur-sm) var(--caui-ease-out),
+    color var(--caui-dur-xs) var(--caui-ease-out);
   appearance: none;
   -webkit-appearance: none;
 }
@@ -961,7 +961,7 @@ export const CHAT_CSS = `
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  transition: background 0.14s ease, border-color 0.14s ease;
+  transition: background var(--caui-dur-xs) var(--caui-ease-out), border-color var(--caui-dur-xs) var(--caui-ease-out);
 }
 
 .caui-lightbox-close:hover {
@@ -1177,7 +1177,7 @@ export const CHAT_CSS = `
   box-shadow: var(--caui-shadow);
   appearance: none;
   -webkit-appearance: none;
-  transition: background 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
+  transition: background var(--caui-dur-xs) var(--caui-ease-out), border-color var(--caui-dur-xs) var(--caui-ease-out), transform var(--caui-dur-xs) var(--caui-ease-out);
 }
 
 .caui-new-chat-button:hover:not(:disabled) {

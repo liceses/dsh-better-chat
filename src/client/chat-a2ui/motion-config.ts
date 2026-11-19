@@ -39,11 +39,11 @@ export interface TextEffectSpec {
 export interface MotionTokens {
   springs: { soft: SpringSpec }
   dur: { xs: number; sm: number; md: number; lg: number; reduced: number }
-  ease: { out: EaseSpec; linear: EaseSpec }
+  ease: { out: EaseSpec; linear: EaseSpec; inOut: EaseSpec }
   dist: { sm: number; md: number }
   stagger: { tight: number; loose: number }
   blur: { stream: number }
-  loop: { spin: number; blink: number; pulse: number; orb: number }
+  loop: { spin: number; blink: number; pulse: number; orb: number; trail: number }
 }
 
 export type SpringToken = keyof MotionTokens['springs']
@@ -138,11 +138,11 @@ export const DEFAULT_MOTION: MotionConfig = {
   tokens: {
     springs: { soft: { stiffness: 420, damping: 34, mass: 0.8 } },
     dur: { xs: 0.12, sm: 0.16, md: 0.24, lg: 0.42, reduced: 0.14 },
-    ease: { out: [0.22, 1, 0.36, 1], linear: [0, 0, 1, 1] },
+    ease: { out: [0.22, 1, 0.36, 1], linear: [0, 0, 1, 1], inOut: [0.42, 0, 0.58, 1] },
     dist: { sm: 6, md: 10 },
     stagger: { tight: 0.004, loose: 0.03 },
     blur: { stream: 9 },
-    loop: { spin: 0.8, blink: 1.05, pulse: 1.6, orb: 5.4 },
+    loop: { spin: 0.8, blink: 1.05, pulse: 1.6, orb: 5.4, trail: 5 },
   },
   roles: {
     message: {
@@ -224,6 +224,7 @@ num('tokens.dur.lg', 0, 3)
 num('tokens.dur.reduced', 0, 1)
 RULES['tokens.ease.out'] = { kind: 'ease' }
 RULES['tokens.ease.linear'] = { kind: 'ease' }
+RULES['tokens.ease.inOut'] = { kind: 'ease' }
 num('tokens.dist.sm', -80, 80)
 num('tokens.dist.md', -120, 120)
 num('tokens.stagger.tight', 0, 1)
@@ -233,6 +234,7 @@ num('tokens.loop.spin', 0.1, 6)
 num('tokens.loop.blink', 0.1, 6)
 num('tokens.loop.pulse', 0.2, 10)
 num('tokens.loop.orb', 1, 30)
+num('tokens.loop.trail', 0.2, 30)
 
 // ---- roles：从出厂值里遍历叶子，按键名决定规则，避免手写几十行 ----
 const ROLE_TOKEN_VALUES: Record<string, readonly string[]> = {

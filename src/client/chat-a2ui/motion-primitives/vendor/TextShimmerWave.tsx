@@ -10,6 +10,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import type { Transition } from 'framer-motion'
 import { cx } from '../../util'
+import { MOTION } from '../../motion-config'
 
 export interface TextShimmerWaveProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
   children: string
@@ -74,7 +75,7 @@ export function TextShimmerWave ({
               repeat: Infinity,
               repeatDelay: (children.length * 0.05) / spread,
               delay,
-              ease: 'easeInOut',
+              ease: MOTION.tokens.ease.inOut,
               ...transition,
             }}
           >
