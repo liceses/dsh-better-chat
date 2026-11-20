@@ -93,8 +93,14 @@ export function findNewSessionControls (root: ParentNode): Element[] {
  */
 export function isNewSessionShortcut (
   event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>
-    & Partial<Pick<KeyboardEvent, 'code'>>,
+    & Partial<Pick<KeyboardEvent, 'code' | 'repeat' | 'getModifierState'>>,
 ): boolean {
+  // 长按产生的重复事件不再往下传：宿主自己的 dispatch 也过滤了 repeat，
+  // 我们不过滤就会在「按住不放」时连续新建会话。
+  if (event.repeat === true) return false
+  // Windows 上 AltGr = Ctrl+Alt，是输入德语/波兰语等字符的正常手段；
+  // 宿主同样用 getModifierState('AltGraph') 放行，这里对齐。
+  if (typeof event.getModifierState === 'function' && event.getModifierState('AltGraph')) return false
   if (event.shiftKey) return false
   if (!event.ctrlKey && !event.metaKey && !event.altKey) return false
   if (event.code === 'KeyN') return true
@@ -107,5 +113,6 @@ export function isNewSessionShortcut (
  */
 export function describeAffordances (): string {
   return '点击判据 ' + NEW_SESSION_CONTROL_SELECTOR
-    + '；快捷键判据 Ctrl/⌘/Alt 任一修饰键 + N（不含 Shift，物理键 KeyN 或键值 n）'
+    + '；快捷键判据 Ctrl/⌘/Alt 任一修饰键 + N（不含 Shift，跳过长按重复与 AltGr；'
+    + '物理键 KeyN 或键值 n）'
 }

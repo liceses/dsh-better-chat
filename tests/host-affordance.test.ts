@@ -163,4 +163,13 @@ describe('isNewSessionShortcut：认快捷键', () => {
     expect(isNewSessionShortcut(shortcut({ key: 'n', ctrlKey: true }))).toBe(true)
     expect(isNewSessionShortcut(shortcut({ key: 'm', ctrlKey: true }))).toBe(false)
   })
+
+  it('长按产生的重复事件不拦截（否则按住不放会连建会话）', () => {
+    expect(isNewSessionShortcut({ key: 'n', code: 'KeyN', ctrlKey: true, metaKey: false, altKey: false, shiftKey: false, repeat: true })).toBe(false)
+  })
+
+  it('AltGr（Windows 的 Ctrl+Alt）不拦截，那是打字符', () => {
+    const altGraph = { key: 'n', code: 'KeyN', ctrlKey: true, metaKey: false, altKey: true, shiftKey: false, getModifierState: (name: string) => name === 'AltGraph' }
+    expect(isNewSessionShortcut(altGraph)).toBe(false)
+  })
 })
