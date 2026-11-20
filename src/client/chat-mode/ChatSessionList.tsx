@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { cls } from '../chat-a2ui/classes'
 import { spring } from '../chat-a2ui/motion'
 import { toggleMotionLevel, useMotionLevel } from '../chat-a2ui/motion-preference'
+import { useMotionAttribute } from '../chat-a2ui/motion-scope'
 import { useChatStyles } from '../chat-a2ui/style'
 import type { UseSessions } from '../chat-a2ui/types'
 import { cx } from '../chat-a2ui/util'
@@ -45,6 +46,8 @@ export function ChatSessionList ({ controller, useSessions, wide = true }: ChatS
   const mode = useChatMode(controller)
   const level = useMotionLevel()
   const animated = level === 'full'
+  // 档位属性统一由 useMotionAttribute 给出：CSS 选择器挂在根元素自身。
+  const motionAttrs = useMotionAttribute()
   const rows = useMemo(() => listChatSessionsSafe(snapshot), [snapshot])
   const rowTransition = animated ? spring : { duration: 0 }
 
@@ -52,7 +55,7 @@ export function ChatSessionList ({ controller, useSessions, wide = true }: ChatS
     <div
       className={cx(cls.chatModeList, wide && cls.chatModeListWide)}
       data-chat-mode-sidebar=""
-      data-motion={level}
+      {...motionAttrs}
     >
       <div className={cls.chatModeListHead}>
         <span className={cls.chatModeListTitle}>Chat 会话</span>

@@ -9,7 +9,7 @@
 import React, { useId } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { cx } from '../../util'
-import { useCollapse } from '../../motion-hooks'
+import { useRole } from '../../motion-hooks'
 import { useMotionEnabled } from '../../motion-preference'
 
 export interface CollapsibleBodyProps {
@@ -23,7 +23,7 @@ export function CollapsibleBody ({ open, id, className, children }: CollapsibleB
   const fallbackId = useId()
   const enabled = useMotionEnabled()
   // 折叠是尺寸动画，角色 panel.collapse 只提供过渡；reduced 档由 enabled 兜底成 0。
-  const collapse = useCollapse('panel.collapse')
+  const collapse = useRole('panel.collapse').transition
   return (
     <div className="caui-collapsible">
       <AnimatePresence initial={false}>

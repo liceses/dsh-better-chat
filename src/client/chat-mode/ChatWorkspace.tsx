@@ -14,6 +14,7 @@ import { cls } from '../chat-a2ui/classes'
 import { layoutSpring } from '../chat-a2ui/motion'
 import { MOTION } from '../chat-a2ui/motion-config'
 import { useMotionLevel } from '../chat-a2ui/motion-preference'
+import { useMotionAttribute } from '../chat-a2ui/motion-scope'
 import { TextEffect } from '../chat-a2ui/motion-primitives/vendor/TextEffect'
 import { TextShimmerWave } from '../chat-a2ui/motion-primitives/vendor/TextShimmerWave'
 import { ChatInnerScrollContext } from '../chat-a2ui/scroll-context'
@@ -90,6 +91,8 @@ export function ChatWorkspace ({
   const [trajectoryOpen, setTrajectoryOpen] = useState(false)
   const motionLevel = useMotionLevel()
   const animated = motionLevel === 'full'
+  // 档位属性统一由 useMotionAttribute 给出：CSS 选择器挂在根元素自身。
+  const motionAttrs = useMotionAttribute()
 
   const toggleTrajectory = useCallback((): void => {
     setTrajectoryOpen(open => !open)
@@ -134,7 +137,7 @@ export function ChatWorkspace ({
       className={cx(cls.chatModeWorkspace, session.blank === true && cls.chatModeBlank)}
       data-chat-panel={CHAT_PANEL_ID}
       data-chat-workspace=""
-      data-motion={motionLevel}
+      {...motionAttrs}
     >
       <header className={cls.chatModeHeader} data-chat-mode-header="">
         <div className={cls.chatModeHeaderMain}>

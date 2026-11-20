@@ -239,10 +239,11 @@ __cauiProbe.off()       // 停止记录
 组件这样消费：
 
 ```tsx
-const enter = useEnter('message.enter')   // { initial, animate, transition }
-const exit = useExit('message.exit')
-const collapse = useCollapse('panel.collapse')
-const stream = useStream('text.stream')   // 流式逐字的 时长 / 模糊 / 错峰
+const enter = useEnter('message.enter')      // { initial, animate, transition }
+const exit = useRole('message.exit').exit    // 单字段投影直接用 useRole
+const transition = useRole('panel.collapse').transition
+const stream = useStream('text.stream')      // 流式逐字的 时长 / 模糊 / 错峰
+const attrs = useMotionAttribute()           // { 'data-motion': level }，档位唯一出口
 ```
 
 **动效档位 full / reduced**：语义在 `motion-roles.ts` 统一实现——位移、缩放、模糊归零（前庭刺激），不透明度与颜色保留但压到 `tokens.dur.reduced`；`system.spin` / `system.blink` 保留，它们是状态指示。

@@ -5,7 +5,8 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { join } from 'node:path'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_MOTION, MOTION, ROLE_IDS, motionCssVars } from '../src/client/chat-a2ui/motion-config'
 import { expandRole, roleSpec } from '../src/client/chat-a2ui/motion-roles'
@@ -100,5 +101,74 @@ describe('动效体系', () => {
     const out = execFileSync(process.execPath, [join(ROOT, 'scripts', 'lint-motion.mjs')], { encoding: 'utf8' })
     expect(out).not.toContain('白名单失效')
     expect(out).not.toContain('超上限')
+  })
+})
+
+/** 递归收集 src 下的 .ts / .tsx；rel 是相对仓库根的 posix 路径（报告里能直接定位）。 */
+function sourceFiles (): Array<{ rel: string; abs: string }> {
+  const out: Array<{ rel: string; abs: string }> = []
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const abs = join(dir, entry.name)
+      if (entry.isDirectory()) walk(abs)
+      else if (/\.(ts|tsx)$/.test(entry.name)) out.push({ rel: relative(ROOT, abs).replaceAll('\\', '/'), abs })
+    }
+  }
+  walk(join(ROOT, 'src'))
+  return out
+}
+
+/**
+ * 一行源码里是否把 name 当成「值」用。
+ * 排除注释行与对象键（`spring: 'soft'` 这种键名不是引用，否则门禁会被配置表骗过）。
+ */
+function usesName (line: string, name: string): boolean {
+  const trimmed = line.trim()
+  if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) return false
+  const pattern = new RegExp('(?<![\\w$.])' + name + '(?![\\w$])', 'g')
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(line)) !== null) {
+    if (!/^\s*:/.test(line.slice(match.index + name.length))) return true
+  }
+  return false
+}
+
+describe('动效系统的死层门禁', () => {
+  it('motion.ts 的每个导出都至少有一处真实引用（不许留死导出）', () => {
+    const definitionRel = 'src/client/chat-a2ui/motion.ts'
+    const definition = readFileSync(join(ROOT, definitionRel), 'utf8')
+    const names = [...definition.matchAll(/^export (?:const|function) ([A-Za-z_$][\w$]*)/gm)]
+      .map(match => match[1] as string)
+    // 防呆：正则匹配不到就等于门禁在空转。
+    expect(names.length).toBeGreaterThan(0)
+
+    const others = sourceFiles().filter(file => file.rel !== definitionRel)
+    const contents = others.map(file => readFileSync(file.abs, 'utf8').split(String.fromCharCode(10)))
+    for (const name of names) {
+      const referenced = contents.some(lines => lines.some(line => usesName(line, name)))
+      expect(referenced, 'motion.ts 的导出 ' + name + ' 在 src 里零引用，应删掉').toBe(true)
+    }
+  })
+
+  it('data-motion 只从 motion-scope.ts 输出，四个子树根都走 useMotionAttribute', () => {
+    // style.ts / style-p06.ts 里的 data-motion 是 CSS 选择器（消费方），不是写入方。
+    const cssFiles = new Set(['src/client/chat-a2ui/style.ts', 'src/client/chat-a2ui/style-p06.ts'])
+    const writers = sourceFiles()
+      .filter(file => !cssFiles.has(file.rel))
+      .filter(file => readFileSync(file.abs, 'utf8').includes('data-motion'))
+      .map(file => file.rel)
+    expect(writers).toEqual(['src/client/chat-a2ui/motion-scope.ts'])
+
+    // 四个子树根：CSS 选择器挂在根元素自身，漏写一处那个子树就静默失效。
+    const shells = [
+      'src/client/chat-a2ui/ChatA2UIView.tsx',
+      'src/client/chat-mode/ChatPage.tsx',
+      'src/client/chat-mode/ChatWorkspace.tsx',
+      'src/client/chat-mode/ChatSessionList.tsx',
+    ]
+    for (const rel of shells) {
+      const source = readFileSync(join(ROOT, rel), 'utf8')
+      expect(source.includes('useMotionAttribute'), rel + ' 没有用 useMotionAttribute 挂档位').toBe(true)
+    }
   })
 })

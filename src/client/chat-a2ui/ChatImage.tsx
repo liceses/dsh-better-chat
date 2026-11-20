@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { cls } from './classes'
 import { cx, formatBytes } from './util'
 import { spring } from './motion'
-import { useEnter, useExit } from './motion-hooks'
+import { useEnter, useRole } from './motion-hooks'
 import type { ImageAttachmentRef } from './types'
 
 export interface ChatImageProps {
@@ -35,7 +35,7 @@ export function ChatImage ({ attachment, loadImage, alt }: ChatImageProps) {
   const closeRef = useRef<HTMLButtonElement | null>(null)
   // 灯箱开合来自角色 dialog.open：淡入 + 轻微放大，reduced 档自动收敛成纯淡入。
   const dialog = useEnter('dialog.open')
-  const dialogExit = useExit('dialog.open')
+  const dialogExit = useRole('dialog.open').exit
 
   // 宿主原生 imageUrl 返回 Promise（要先向附件服务换地址），测试替身也可以同步返回。
   // 两条路径都收敛到 src/failed，绝不让 Promise 本身进入 img.src。

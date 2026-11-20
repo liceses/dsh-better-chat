@@ -10,9 +10,8 @@ import { Marked, type RendererObject } from 'marked'
 import DOMPurify from 'dompurify'
 import { cls } from './classes'
 import { MOTION, clipSeconds } from './motion-config'
-import { reducedMotion } from './motion'
-import { expandRole } from './motion-roles'
 import { useStream } from './motion-hooks'
+import { useMotionLevel } from './motion-preference'
 import { cx } from './util'
 
 /** 允许出现在 href/src 上的协议白名单。 */
@@ -171,11 +170,15 @@ export const STREAM_CHAR_CLASS = 'caui-md-stream-char'
  * 流式时整段 innerHTML 每个 token 都会被替换一次，所以每次只包「这一帧新长出来的那截」：
  * 之前的字符保持原样（已经清晰），新字符从模糊到清晰，视觉上就是文字在末尾渐渐显影。
  * 不新增 DOM 结构上限——count 由 motion.config.json 的 stream.maxChars 夹住。
+ * @param host - 已经写好 innerHTML 的容器。
+ * @param count - 这一帧新长出来的最后多少个字符要包动画。
+ * @param staggerSeconds - 逐字错峰（秒）；由调用方从 `useStream('text.stream')` 取，
+ *   模块函数不读 hook，也不自带默认值——否则角色约定就有了第二个入口。
  */
 function animateStreamTail (
   host: HTMLElement,
   count: number,
-  staggerSeconds: number = expandRole('text.stream').stagger,
+  staggerSeconds: number,
 ): void {
   if (count <= 0) return
   const walker = host.ownerDocument.createTreeWalker(host, NodeFilter.SHOW_TEXT)
@@ -200,8 +203,6 @@ function animateStreamTail (
   }
   ranges.reverse()
 
-  // 错峰由调用方传入（角色 text.stream 的 stagger）；模块函数不读 hook。
-  const stagger = staggerSeconds
   let charIndex = 0
   for (const range of ranges) {
     const parent = range.node.parentNode
@@ -218,7 +219,7 @@ function animateStreamTail (
       const span = host.ownerDocument.createElement('span')
       span.className = STREAM_CHAR_CLASS
       // 错开一点点，读起来像是一路写过来的
-      if (stagger > 0) span.style.animationDelay = (charIndex * stagger).toFixed(3) + 's'
+      if (staggerSeconds > 0) span.style.animationDelay = (charIndex * staggerSeconds).toFixed(3) + 's'
       span.textContent = char
       fragment.appendChild(span)
       charIndex += 1
@@ -242,6 +243,8 @@ export interface MarkdownProps {
 export const Markdown = memo(function Markdown ({ text, streaming = false, tail = false, className }: MarkdownProps) {
   // 流式逐字的时长/模糊/错峰来自角色 text.stream（reduced 档下 blur 归零）。
   const stream = useStream('text.stream')
+  // 档位来自 useMotionLevel（第二种入口只有这一个）：reduced 档整段跳过尾巴动画与高度补间。
+  const reduced = useMotionLevel() === 'reduced'
   const hostRef = useRef<HTMLDivElement | null>(null)
   /** 上一帧渲染出来的纯文本长度：用来算「这一帧新长出来多少字」。 */
   const seenRef = useRef(0)
@@ -272,12 +275,12 @@ export const Markdown = memo(function Markdown ({ text, streaming = false, tail 
     const firstRun = previousText === null
     const grew = !firstRun && text.length > previousText.length
     if (!grew && !(firstRun && (streaming || tail))) return
-    if (reducedMotion()) return
+    if (reduced) return
 
     const grown = grew ? total - previousTotal : total
     if (grown <= 0) return
     animateStreamTail(host, Math.min(grown, MOTION.stream.maxChars), stream.stagger)
-  }, [html, streaming, tail, text, stream.stagger])
+  }, [html, streaming, tail, text, stream.stagger, reduced])
 
   // 高度补间：宿主一次可能提交几百像素的正文（实测单批 +531px），直接铺开就是
   // 整块内容瞬间顶上来。这里让这一块的高度先停住、再在 0.2s 内长到目标高度，
@@ -287,7 +290,7 @@ export const Markdown = memo(function Markdown ({ text, streaming = false, tail 
   const clipActive = tail || streaming
 
   useLayoutEffect(() => {
-    if (!clipActive || reducedMotion()) {
+    if (!clipActive || reduced) {
       if (clip !== null) setClip(null)
       return
     }
@@ -300,7 +303,7 @@ export const Markdown = memo(function Markdown ({ text, streaming = false, tail 
     // 首次出现用最短时长：高度没变，不该凭空拖一拍。
     const duration = clip === null ? MOTION.stream.clipMin : clipSeconds(next - previous)
     setClip({ height: next, duration })
-  }, [html, clipActive, clip])
+  }, [html, clipActive, clip, reduced])
 
   const style = {
     '--caui-stream-duration': stream.duration + 's',

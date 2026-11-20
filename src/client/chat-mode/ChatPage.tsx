@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react'
 import type { ComponentType, ReactElement, ReactNode } from 'react'
 import { CHAT_MODE_SOURCE, CHAT_PANEL_ID } from '../constants'
 import { cls } from '../chat-a2ui/classes'
-import { useMotionLevel } from '../chat-a2ui/motion-preference'
+import { useMotionAttribute } from '../chat-a2ui/motion-scope'
 import { useChatStyles } from '../chat-a2ui/style'
 import type { SessionReferenceLike, SessionsApi } from '../chat-a2ui/types'
 import type { ChatModeController } from './controller'
@@ -54,7 +54,8 @@ function StatusPage ({ title, detail, action }: { title: string; detail: string;
 export function ChatPage ({ controller, sessions, SessionProvider, renderSlot }: ChatPageProps): ReactElement {
   useChatStyles()
   const mode = useChatMode(controller)
-  const motionLevel = useMotionLevel()
+  // 档位属性统一由 useMotionAttribute 给出（必须在提前 return 之前调用）。
+  const motionAttrs = useMotionAttribute()
   const [entry, setEntry] = useState<Entry | null>(null)
   const [retainError, setRetainError] = useState<string | null>(null)
   const activeId = mode.activeSessionId
@@ -143,7 +144,7 @@ export function ChatPage ({ controller, sessions, SessionProvider, renderSlot }:
   }
 
   return (
-    <div className={cls.chatModePage} data-chat-panel={CHAT_PANEL_ID} data-motion={motionLevel}>
+    <div className={cls.chatModePage} data-chat-panel={CHAT_PANEL_ID} {...motionAttrs}>
       <SessionProvider session={entry.reference}>
         {renderSlot('chat-a2ui.conversation', { controller })}
       </SessionProvider>

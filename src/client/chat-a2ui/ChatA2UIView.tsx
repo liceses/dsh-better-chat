@@ -10,9 +10,10 @@ import type { ChatViewProps } from './types'
 import { ChatRow } from './ChatRow'
 import { ScrollToBottomButton, useStickToBottom } from './ScrollToBottom'
 import { useChatStyles } from './style'
-import { useEnter, useExit } from './motion-hooks'
+import { useEnter, useRole } from './motion-hooks'
 import { MOTION } from './motion-config'
 import { useMotionLevel } from './motion-preference'
+import { useMotionAttribute } from './motion-scope'
 import { AnimatedGroup } from './motion-primitives/vendor/AnimatedGroup'
 import { ProgressiveBlur } from './motion-primitives/vendor/ProgressiveBlur'
 import { TextEffect } from './motion-primitives/vendor/TextEffect'
@@ -111,6 +112,8 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
   const openState = useSession((snapshot) => snapshot.openState)
   const motionLevel = useMotionLevel()
   const animated = motionLevel === 'full'
+  // 档位属性统一由 useMotionAttribute 给出：CSS 选择器挂在根元素自身，漏写就静默失效。
+  const motionAttrs = useMotionAttribute()
 
   const containerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -129,14 +132,14 @@ export function ChatA2UIView (props: ChatViewProps): ReactElement {
   // 行动效来自角色 message.enter / message.exit：full 档走弹簧，
   // reduced 档自动收敛成一次短淡入（语义在 motion-roles.ts 里统一实现）。
   const enter = useEnter('message.enter')
-  const exit = useExit('message.exit')
+  const exit = useRole('message.exit').exit
 
   return (
     <div
       className={cls.root}
       data-chat-view={CHAT_VIEW_ID}
       data-scroll-owner={forceInner || !outer ? 'inner' : 'outer'}
-      data-motion={motionLevel}
+      {...motionAttrs}
     >
       <div className={cls.viewport} ref={containerRef}>
         <div

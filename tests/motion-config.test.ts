@@ -75,15 +75,13 @@ describe('motion.config.json 与加载器', () => {
     expect(css).toContain('.caui-chat-list')
   })
 
-  it('运行时从配置派生：spring / rowEnter / rowExit 跟着令牌与角色走', async () => {
-    const { spring, layoutSpring, collapseSpring, rowEnter, rowExit } = await import('../src/client/chat-a2ui/motion')
+  it('运行时从配置派生：spring / layoutSpring 跟着令牌走', async () => {
+    const { spring, layoutSpring } = await import('../src/client/chat-a2ui/motion')
     const { MOTION } = await import('../src/client/chat-a2ui/motion-config')
     expect(spring).toEqual({ type: 'spring', ...MOTION.tokens.springs.soft })
     expect(layoutSpring).toEqual(spring)
-    expect(collapseSpring).toEqual(spring)
-    expect(rowEnter.initial).toEqual({ opacity: MOTION.roles.message.enter.opacity, y: MOTION.roles.message.enter.y })
-    expect(rowExit.y).toBe(MOTION.roles.message.exit.y)
-    expect(rowExit.opacity).toBe(MOTION.roles.message.exit.opacity)
+    // 行进场 / 退场已完全走 useRole（角色语义在 motion-roles.ts），
+    // motion.ts 不再保留 rowEnter* / rowExit* 这层死常量。
   })
 
   it('没有「写了不生效」的配置分组：每个顶层分组都被读过', async () => {
