@@ -61,4 +61,19 @@ export const LIGHTBOX_CSS = `
 .caui-lightbox-close:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.85);
   outline-offset: 2px;
-}`
+}
+/* ---------------------------------------------------------------------------
+   响应式：灯箱自己的窄屏规则（这一块是顶层选择器，不套 .caui-root）
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .caui-lightbox {
+    padding: 12px;
+  }
+
+  .caui-lightbox-close {
+    top: max(10px, env(safe-area-inset-top));
+    right: 10px;
+  }
+}
+`

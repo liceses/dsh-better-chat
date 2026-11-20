@@ -5,20 +5,13 @@
  * 状态页与主要、次要按钮，以及落在页面级断点上的规则（轨迹改覆盖层、
  * 窄屏收紧、减少动效把过渡压到 1ms）。
  *
- * 移动端断点（max-width: 640px）里同时改了消息流的留白和灯箱的内边距：
- * 它必须排在灯箱之后才能压住灯箱的默认值，因此整块留在这里，
- * 而不是拆到 flow.ts。
+ * 这里的 @media 只管**页面外壳自己**的收窄规则（轨迹抽屉改覆盖层、头部收紧、
+ * 工具栏按钮），减少动效那一块也在本文件。
  *
- * B Soft glass（原 P0.6 视觉层）的增量已并回本块末尾：页面底纹与玻璃头部、
- * 工具条按钮、轨迹抽屉与状态页按钮。其中两个 @media（900 / 640）打包了
- * 横跨消息流 / 左栏 / 页面的收窄规则 —— 整块不能拆（拆开会多出规则边界），
- * 而且必须排在 list / flow 的同名规则之后才压得住，所以整块留在本块末尾。
- *
- * 最后 4 条是「跨表面覆盖」：.caui-user / .caui-user-bubble / .caui-assistant-text
- * 与 .caui-markdown / .caui-reasoning-summary 与 .caui-tool-header 属于消息流，
- * 但今天靠「P0.6 整层排在最后」压住本块 640 断点里的旧值。合并后若留在 flow 块，
- * 顺序会颠倒 —— 那是行为变化，因此显式钉在本文件结尾，由
- * tests/style-split.test.ts 的级联等价性看住。
+ * 消息流、左栏、灯箱各自的移动端断点已经搬回它们自己的文件：以前它们挤在
+ * 本文件的 900 / 640 块里，胜负靠「谁排在后面」，改一处要跨三个文件推演。
+ * 现在每个表面一个文件，媒体查询紧跟着基础规则，覆盖写在媒体查询之后；
+ * tests/style-split.test.ts 的级联等价性（448 个状态）逐条证明行为没变。
  *
  * 轨迹抽屉的宽度由 ChatWorkspace 的 framer（animate={{ width: 360 }}）独占：
  * 这里只留 max-width 兜底窄屏，不再用 !important 抢 width 的所有权。
@@ -338,10 +331,6 @@ export const MISC_CSS = `
   .caui-chat-subtitle {
     display: none;
   }
-
-  .caui-chat-list {
-    padding: 6px 4px 10px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -354,73 +343,6 @@ export const MISC_CSS = `
 /* ---------------------------------------------------------------------------
    移动端：收紧留白、隐藏次要信息
    --------------------------------------------------------------------------- */
-@media (max-width: 640px) {
-  .caui-flow {
-    gap: 14px;
-    padding: 14px 12px 24px;
-  }
-
-  .caui-empty {
-    padding: 40px 16px;
-  }
-
-  .caui-user {
-    max-width: 92%;
-  }
-
-  .caui-user-bubble {
-    padding: 9px 12px;
-    border-radius: 14px 14px 4px 14px;
-  }
-
-  .caui-user-text,
-  .caui-assistant-text,
-  .caui-markdown {
-    font-size: 14.5px;
-  }
-
-  .caui-tool-header {
-    gap: 6px;
-    padding: 8px;
-  }
-
-  .caui-tool-name {
-    max-width: 56%;
-  }
-
-  .caui-tool-args {
-    display: none;
-  }
-
-  .caui-tool-body .caui-tool-args {
-    display: block;
-  }
-
-  .caui-scroll-button {
-    bottom: 14px;
-    width: 34px;
-    height: 34px;
-  }
-
-  .caui-lightbox {
-    padding: 12px;
-  }
-
-  .caui-lightbox-close {
-    top: max(10px, env(safe-area-inset-top));
-    right: 10px;
-  }
-
-  .caui-token-usage {
-    display: none;
-  }
-
-  .caui-markdown pre {
-    font-size: 12px;
-    padding: 8px 10px;
-  }
-}
-
 /* ---------------------------------------------------------------------------
    B Soft glass（原 P0.6 视觉层）已并回本块
    --------------------------------------------------------------------------- */
@@ -556,11 +478,6 @@ export const MISC_CSS = `
 }
 
 @media (max-width: 900px) {
-  /* 只收紧内边距：横向那两处 margin 是对齐宿主沟槽用的，与窗口宽度无关 */
-  .caui-chat-list {
-    padding: 6px 6px 6px;
-  }
-
   .caui-chat-header {
     padding: 9px 12px;
   }
@@ -571,29 +488,6 @@ export const MISC_CSS = `
 }
 
 @media (max-width: 640px) {
-  .caui-flow {
-    gap: 16px;
-    padding: 18px 14px 30px;
-  }
-
-  .caui-empty {
-    min-height: 260px;
-    padding: 36px 18px 32px;
-  }
-
-  .caui-empty-title {
-    font-size: 21px;
-  }
-
-  .caui-empty-suggestion {
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-
-  .caui-tool-status-text {
-    display: none;
-  }
-
   .caui-chat-header-main {
     gap: 6px;
   }
@@ -601,51 +495,6 @@ export const MISC_CSS = `
   .caui-chat-title {
     font-size: 14px;
   }
-
-  .caui-chat-new {
-    height: 38px;
-  }
-
-  .caui-chat-row {
-    min-height: 44px;
-  }
 }
 
-/* ---------------------------------------------------------------------------
-   跨表面覆盖：下面 4 条属于消息流，但必须排在 misc 自己的 640 断点之后
-
-   今天它们靠「P0.6 整层排在最后」压住 640 断点里的旧值：
-   .caui-user 92% / .caui-user-bubble 9px 12px / .caui-assistant-text 与
-   .caui-markdown 14.5px / .caui-tool-header 8px。合并后若留在 flow 块，
-   顺序颠倒会让这些旧值反过来赢 —— 那是行为变化。因此显式钉在末尾，
-   归属由 tests/style-split.test.ts 的级联等价性看住。
-   --------------------------------------------------------------------------- */
-
-.caui-assistant-text,
-.caui-markdown {
-  font-size: 15.5px;
-  line-height: 1.75;
-}
-
-.caui-user {
-  max-width: min(680px, 84%);
-  gap: 7px;
-}
-
-.caui-user-bubble {
-  padding: 11px 15px;
-  border-radius: 18px 18px 6px 18px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--caui-accent) 86%, #ffffff), var(--caui-accent));
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--caui-accent) 22%, transparent);
-}
-
-.caui-reasoning-summary,
-.caui-tool-header {
-  width: auto;
-  max-width: 100%;
-  padding: 2px 14px 2px 0;
-  gap: 6px;
-  color: var(--caui-muted);
-  font-size: 12px;
 }`

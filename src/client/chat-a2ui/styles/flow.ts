@@ -13,11 +13,10 @@
  * 浮动模糊层与回到底部按钮的玻璃底，以及 reduced 档的动画收口。
  * 它们今天仍然压得住本块自己的基础值 —— 靠的是同一文件里靠后的位置。
  *
- * 页面外壳、左栏与输入区都不在这里；消息流自己的移动端断点落在 misc.ts
- * （那一块 @media 里还改了灯箱，级联顺序要求它排在灯箱之后）。
- * 另外 4 条 P0.6 规则（.caui-user / .caui-user-bubble / .caui-assistant-text 与
- * .caui-markdown / .caui-reasoning-summary 与 .caui-tool-header）必须排在 misc 的
- * 640 断点之后才不会翻转胜负，因此显式留在 misc.ts 末尾，不在这里。
+ * 页面外壳、左栏与输入区都不在这里。消息流自己的移动端断点在本文件末尾：
+ * 一个 @media (max-width: 640px) 装着窄屏值，紧跟其后是四处覆盖
+ * （.caui-user 宽度 / .caui-user-bubble 内边距 / 正文字号 / 过程行内边距）。
+ * 以前它们散在 misc.ts，胜负取决于别的文件的先后；现在同一段话就能读完顺序。
  */
 export const FLOW_CSS = `
 
@@ -1670,4 +1669,131 @@ export const FLOW_CSS = `
     transform: translateY(-3px) scale(1.035);
     filter: saturate(1.12);
   }
-}`
+}
+/* ---------------------------------------------------------------------------
+   响应式：本表面自己的窄屏规则 + 覆盖，和它的基础规则放在同一个文件里
+
+   以前这些散在 misc.ts 的两个 640 断点里，靠「谁排在后面谁赢」压住彼此；
+   现在按表面归位：媒体查询里是窄屏值，紧跟其后的是覆盖（同一份文件、同一段话
+   就能读完顺序）。级联结果由 tests/style-split.test.ts 的级联等价性在 448 个
+   状态下逐条盯住。
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  /* 两组合并成一块，顺序照原样：先是 P0.6 那一组的值，再是更早的 640 断点的值。
+     同名的两条都留着——后写的赢，和合并前「后一个块赢」完全等价，
+     也因此规则清单能与基线逐条对上（没有偷偷删掉任何一条声明）。 */
+
+  .caui-flow {
+    gap: 14px;
+    padding: 14px 12px 24px;
+  }
+
+  .caui-empty {
+    padding: 40px 16px;
+  }
+
+  .caui-user {
+    max-width: 92%;
+  }
+
+  .caui-user-bubble {
+    padding: 9px 12px;
+    border-radius: 14px 14px 4px 14px;
+  }
+
+  .caui-user-text,
+  .caui-assistant-text,
+  .caui-markdown {
+    font-size: 14.5px;
+  }
+
+  .caui-tool-header {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .caui-tool-name {
+    max-width: 56%;
+  }
+
+  .caui-tool-args {
+    display: none;
+  }
+
+  .caui-tool-body .caui-tool-args {
+    display: block;
+  }
+
+  .caui-scroll-button {
+    bottom: 14px;
+    width: 34px;
+    height: 34px;
+  }
+
+  .caui-token-usage {
+    display: none;
+  }
+
+  .caui-markdown pre {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  /* —— 更早的 640 断点（原本在 misc.ts 更靠后的位置） —— */
+
+  .caui-flow {
+    gap: 16px;
+    padding: 18px 14px 30px;
+  }
+
+  .caui-empty {
+    min-height: 260px;
+    padding: 36px 18px 32px;
+  }
+
+  .caui-empty-title {
+    font-size: 21px;
+  }
+
+  .caui-empty-suggestion {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .caui-tool-status-text {
+    display: none;
+  }
+}
+
+/* 覆盖：宽屏尺寸在窄屏下仍然成立，所以写在媒体查询之后（同文件内就近） */
+
+.caui-assistant-text,
+.caui-markdown {
+  font-size: 15.5px;
+  line-height: 1.75;
+}
+
+.caui-user {
+  max-width: min(680px, 84%);
+  gap: 7px;
+}
+
+.caui-user-bubble {
+  padding: 11px 15px;
+  border-radius: 18px 18px 6px 18px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--caui-accent) 86%, #ffffff), var(--caui-accent));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--caui-accent) 22%, transparent);
+}
+
+.caui-reasoning-summary,
+.caui-tool-header {
+  width: auto;
+  max-width: 100%;
+  padding: 2px 14px 2px 0;
+  gap: 6px;
+  color: var(--caui-muted);
+  font-size: 12px;
+}
+`

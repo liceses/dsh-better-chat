@@ -398,4 +398,34 @@ export const LIST_CSS = `
   border-radius: 999px;
   background: var(--caui-border-strong);
   background-clip: content-box;
-}`
+}
+/* ---------------------------------------------------------------------------
+   响应式：左栏自己的窄屏规则（与基础规则同文件）
+
+   顺序是照搬合并前的：640 那条原本在前、900 那条在后，而 640 的内容也命中
+   900 的条件，所以 900 的值在窄屏下反而赢。这里保持同一顺序，级联结果不变；
+   tests/style-split.test.ts 的级联等价性会盯住。
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .caui-chat-list {
+    padding: 6px 4px 10px;
+  }
+
+  .caui-chat-new {
+    height: 38px;
+  }
+
+  .caui-chat-row {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 900px) {
+  /* 只收紧内边距：横向那两处 margin 是对齐宿主沟槽用的，与窗口宽度无关 */
+  .caui-chat-list {
+    padding: 6px 6px 6px;
+  }
+}
+
+`

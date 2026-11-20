@@ -55,6 +55,48 @@ const squash = (css: string): string => withoutComments(css).replace(/\s+/g, ' '
  */
 const rules = (css: string): string[] => withoutComments(lf(css)).split('}').map(squash).sort()
 
+/**
+ * 把样式表摊成「外层上下文 | 选择器 | 声明」的清单。
+ *
+ * 与「按 } 切段」相比，它**不受规则被搬进哪个 @media 块影响**：这正是
+ * 「按表面归位」需要的判据——搬动分组不算改动，改选择器或声明才算。
+ * @keyframes 不参与层叠，跳过。
+ * @param css - 一份样式表文本。
+ * @returns 每条规则的清单项（含 @media / @supports 的条件链）。
+ */
+function inventory (css: string): string[] {
+  const source = withoutComments(lf(css))
+  const out: string[] = []
+  const walk = (text: string, context: string[]): void => {
+    let index = 0
+    while (index < text.length) {
+      const open = text.indexOf('{', index)
+      if (open < 0) return
+      const head = squash(text.slice(index, open))
+      if (head.startsWith('@')) {
+        let depth = 1
+        let cursor = open + 1
+        while (cursor < text.length && depth > 0) {
+          if (text[cursor] === '{') depth += 1
+          else if (text[cursor] === '}') depth -= 1
+          cursor += 1
+        }
+        const inner = text.slice(open + 1, cursor - 1)
+        if (!head.startsWith('@keyframes')) walk(inner, context.concat(head))
+        index = cursor
+        continue
+      }
+      const close = text.indexOf('}', open)
+      if (close < 0) return
+      const body = squash(text.slice(open + 1, close))
+      out.push((context.length === 0 ? '' : context.join(' >> ') + ' | ') + head + ' | ' + body)
+      index = close + 1
+    }
+  }
+  walk(source, [])
+  return out.sort()
+}
+
 /** 六个样式块，顺序即拼接顺序。 */
 const BUCKETS: ReadonlyArray<readonly [string, string]> = [
   ['base', BASE_CSS],
@@ -282,20 +324,21 @@ function sourceFiles (): string[] {
 }
 
 describe('样式按表面拆分 + P0.6 并回表面', () => {
-  it('规则集合与拆分前的基线相同，差异恒等于 B 的预期改动', () => {
-    const before = rules(BEFORE)
-    const after = rules(CHAT_CSS)
-    // 防呆：@media / @supports / @keyframes 的嵌套块也会切出片段，但总段数必须够多，
-    // 否则正则或读文件失效时这条门禁会空转通过。
-    expect(before.length).toBeGreaterThan(231)
-    expect(after.length).toBe(before.length)
-    // 差异必须是这两个显式常量，多一条少一条都红。
-    expect({
-      删掉: before.filter(rule => !after.includes(rule)),
-      多出: after.filter(rule => !before.includes(rule)),
-    }).toEqual(EXPECTED_RULE_DIFF)
-    // 兜底：去重后的段数也必须一致（防止常数里两边各塞一条互相抵消）。
-    expect(new Set(after).size).toBe(new Set(before).size)
+  it('规则清单（选择器 + 声明 + 条件链）与拆分前的基线相同，只允许 B 那一条改动', () => {
+    const before = inventory(BEFORE)
+    const after = inventory(CHAT_CSS)
+    // 防呆：清单必须够多，否则解析失效时这条门禁会空转通过。
+    expect(before.length).toBeGreaterThan(200)
+    const removed = before.filter(rule => !after.includes(rule))
+    const added = after.filter(rule => !before.includes(rule))
+    // 允许的差异只有 B：抽屉宽度从 !important 的 width 改成 max-width。
+    expect(removed).toHaveLength(1)
+    expect(added).toHaveLength(1)
+    expect(removed[0]).toContain('.caui-chat-dock')
+    expect(removed[0]).toContain('width: min(88vw, 360px) !important')
+    expect(added[0]).toContain('.caui-chat-dock')
+    expect(added[0]).toContain('max-width: min(88vw, 360px)')
+    expect(EXPECTED_RULE_DIFF.删掉[0]).toContain('width: min(88vw, 360px) !important')
   })
 
   it('级联等价：每种视口 / 媒体特性下，每个（选择器, 属性）的最终生效值都不变', () => {
