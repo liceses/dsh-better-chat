@@ -18,7 +18,7 @@ DSH 的 Chat 模式：左栏一个 **Chat** 入口，打开一块独立的 Chat 
 | 动效开关 | 侧栏 ✦ 可切换 full / reduced，localStorage 持久化 |
 | 暗色 | 跟随宿主 `body[data-ds-dark-theme]`，消息区、卡片、侧栏、composer 同步 |
 | 新建对话 | Chat 头部「新对话」、左栏「新对话」；空白会话直接显示 Chat 空态 |
-| 原生新建会话 | Chat 打开期间，左栏原生「新建会话」与 Ctrl/Cmd+N 被接管为新建 Chat 对话 |
+| 原生新建会话 | Chat 打开期间，左栏原生「新建会话」与宿主自己的快捷键（桌面端 Ctrl/⌘+N，Web 端 Ctrl/⌘+Alt+N）被接管为新建 Chat 对话；判据见 `chat-mode/host-affordance.ts`，宿主改版时挂载自检会告警 |
 | 任意轮分支 | 每条 turn tail 的「从此分支」，子会话自动成为当前 Chat |
 | 多开 / 独立上下文 | 每个 Chat 是独立 Session，左栏列表可切换，历史互不污染 |
 | 自定义系统提示词 | 插件 host 配置 `systemPrompt` |
@@ -62,7 +62,7 @@ pnpm install
 1. 点左栏 **Chat**。插件会选中最近更新的 Chat 会话；一个都没有时自动创建一个空白会话。
 2. 直接在底部原生 composer 输入。首条消息发出后空态自动变成正常消息流。
 3. 头部「新对话」或左栏「新对话」创建新会话；左栏列表切换会话。
-4. Chat 打开时，点左栏原生 **新建会话** 或按 **Ctrl/Cmd+N**，仍留在 Chat 里新建，而不是跳到原生 conversation。
+4. Chat 打开时，点左栏原生 **新建会话** 或按宿主自己的新建快捷键（桌面端 **Ctrl/⌘+N**，Web 端 **Ctrl/⌘+Alt+N**），仍留在 Chat 里新建，而不是跳到原生 conversation。
 5. 每条回答末尾的「从此分支」以该轮结束点 fork，子会话自动成为当前 Chat。
 6. 头部「轨迹」打开右侧轨迹抽屉。
 7. 头部返回箭头回到原生 conversation；原生左栏、主面板和当前会话都会恢复。
