@@ -27,7 +27,7 @@ DSH 的 Chat 模式：左栏一个 **Chat** 入口，打开一块独立的 Chat 
 | 轨迹 | Header「轨迹」打开右侧抽屉，内嵌原生 trajectory 视图 |
 | 滚动归属 | Chat 主面板内滚动；原生 conversation 的 Chat UI tab 走外层滚动，两者不嵌套 |
 | 退出 | Header 返回箭头回到原生 conversation，原生工作区恢复 |
-| A2UI | P1；当前保留普通流式文字，不显示假的 A2UI 入口 |
+| A2UI | P1；宿主**没有** A2UI 运行时（无包 / 无工具 / 无渲染器，见 `docs/research/a2ui-host.md`），规范在运行时内置的 `a2ui` 技能里（32 组件语法）；接入意味着插件自建协议解析 + 渲染器。当前保留普通流式文字，不显示假的 A2UI 入口 |
 | 布局动效 | Framer Motion layout + AnimatePresence + spring；reduced 档只停常驻循环动画，保留颜色过渡 |
 | 过程行密度 | 相邻思考 / 工具行收紧到 10px；只有正文行才占页脚 |
 | 权限选择 | Chat 面板内隐藏原生 permission chip；preset 能力固定 |
