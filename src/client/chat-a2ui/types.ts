@@ -235,16 +235,3 @@ export interface NewChatInjected {
 export interface NewChatProps extends NewChatInjected {
   sessionId: string
 }
-
-/** Type guards for the merge-extensible node payload. */
-export function isUserData (data: ChatNodeData): data is UserMessageData {
-  return data.kind === 'user' || data.kind === 'steering' || data.kind === 'context'
-}
-
-export function isAssistantData (data: ChatNodeData): data is AssistantData {
-  return data.kind === 'assistant-step'
-}
-
-export function isTurnTailData (data: ChatNodeData): data is TurnTailData {
-  return data.kind === 'turn-tail'
-}

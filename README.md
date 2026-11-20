@@ -159,7 +159,8 @@ src/client/chat-mode/
   useChatMode.ts                 useSyncExternalStore 绑定
 src/client/chat-a2ui/
   ChatA2UIView.tsx               消息流容器、内滚动、空态
-  ChatRow.tsx                    按节点 kind 分发
+  ChatRow.tsx                    行渲染：按 RowView 查表，含兜底未知行
+  row-model.ts                   节点数据 → RowView 的收窄与分派（不依赖 React）
   Markdown.tsx                   流式 Markdown、残留粗体提升、链接加固
   AssistantBlocks.tsx            text / reasoning / tool / image 组合
   ToolCard.tsx                   工具调用折叠卡

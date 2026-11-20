@@ -11,13 +11,16 @@ import { useId, useState } from 'react'
 import { cls } from './classes'
 import { cx, firstLine, prettyJson } from './util'
 import { CollapsibleBody } from './motion-primitives/vendor/CollapsibleBody'
+import { toolStatusOf, type ToolStatus } from './row-model'
 import type { ContentBlock, ToolCallData } from './types'
 
 export interface ToolCardProps {
   root: ToolCallData['root']
+  /** 行模型取出的工具名；省略时退回 root.name。 */
+  title?: string
+  /** 行模型取出的状态；省略时用 toolStatusOf(root) 现算，判据与行模型同一份。 */
+  status?: ToolStatus
 }
-
-type ToolStatus = 'running' | 'done' | 'error'
 
 const STATUS_TEXT: Record<ToolStatus, string> = {
   running: '运行中',
@@ -89,29 +92,25 @@ function errorSummary (error: ToolCallData['root']['error']): string {
   return parts.length === 0 ? '工具调用失败' : parts.join(' · ')
 }
 
-export function ToolCard ({ root }: ToolCardProps) {
+export function ToolCard ({ root, title, status }: ToolCardProps) {
   const [open, setOpen] = useState(false)
   const bodyId = useId() + '-tool'
+  const label = title ?? root.name
+  const state: ToolStatus = status ?? toolStatusOf(root)
 
   const argsText = root.argsRaw === undefined ? '' : prettyJson(root.argsRaw, 4000)
   const hasArgs = argsText.trim() !== ''
   const preview = argsPreview(root.argsRaw)
   const resultText = contentToText(root.content)
-  const hasResult = root.content !== undefined
   const hasError = root.isError === true || root.error !== undefined
-  const status: ToolStatus = hasError
-    ? 'error'
-    : root.phase === 'preparing' || (root.phase === 'start' && !hasResult)
-      ? 'running'
-      : 'done'
-  const statusText = STATUS_TEXT[status]
+  const statusText = STATUS_TEXT[state]
   const kind = root.kind !== undefined && root.kind.trim() !== '' ? root.kind.trim() : ''
   const occurredError = errorSummary(root.error)
 
   return (
     <div
       className={cls.tool}
-      data-state={status}
+      data-state={state}
       data-open={open ? 'true' : 'false'}
       data-error={hasError ? 'true' : undefined}
     >
@@ -120,7 +119,7 @@ export function ToolCard ({ root }: ToolCardProps) {
         className={cls.toolHeader}
         aria-expanded={open}
         aria-controls={open ? bodyId : undefined}
-        aria-label={root.name + '（' + statusText + '），' + (open ? '收起' : '展开') + '详情'}
+        aria-label={label + '（' + statusText + '），' + (open ? '收起' : '展开') + '详情'}
         onClick={() => setOpen((value) => !value)}
       >
         <svg
@@ -139,10 +138,10 @@ export function ToolCard ({ root }: ToolCardProps) {
           <rect x="2.2" y="3" width="11.6" height="10" rx="2" />
           <path d="M4.8 6.4 6.6 8l-1.8 1.6M8.2 9.9h3" />
         </svg>
-        <span className={cls.toolStatus} data-state={status} aria-hidden="true" />
-        <span className={cls.toolName}>{root.name}</span>
+        <span className={cls.toolStatus} data-state={state} aria-hidden="true" />
+        <span className={cls.toolName}>{label}</span>
         {kind === '' ? null : <span className={cls.toolChip}>{kind}</span>}
-        <span className={cls.toolStatusText} data-state={status} aria-hidden="true">{statusText}</span>
+        <span className={cls.toolStatusText} data-state={state} aria-hidden="true">{statusText}</span>
         {preview === '' ? null : <span className={cls.toolArgs}>{preview}</span>}
         <svg
           className={cls.toolChevron}
