@@ -112,6 +112,14 @@ export interface MotionConfig {
     holdMs: number
     releaseTau: number
     instantAbove: number
+    /** 位移归属容差（px）：与「我们最后写入的坐标」差不超过它就算我们自己的位移。 */
+    ownershipTolerance: number
+    /** 平滑滚动期间的忽略窗口（ms）：窗口内的位移不算「用户上滚」。 */
+    smoothWindowMs: number
+    /** 用户刚滚过之后抑制「直接落位」的窗口（ms）。 */
+    userScrollWindowMs: number
+    /** 滚轮 / 触摸让位后抑制上滚判定的窗口（ms）。 */
+    yieldWindowMs: number
   }
   /** 文字微光（chat-mode 的「正在生成…」）：周期、扩散、各向位移与缩放。 */
   shimmer: {
@@ -176,6 +184,10 @@ export const DEFAULT_MOTION: MotionConfig = {
     holdMs: 3200,
     releaseTau: 0.45,
     instantAbove: 1600,
+    ownershipTolerance: 2,
+    smoothWindowMs: 900,
+    userScrollWindowMs: 600,
+    yieldWindowMs: 200,
   },
   shimmer: {
     duration: 1,
@@ -302,6 +314,10 @@ num('scroll.speedTau', 0.05, 4)
 num('scroll.holdMs', 0, 6000)
 num('scroll.releaseTau', 0.05, 4)
 num('scroll.instantAbove', 200, 20000)
+num('scroll.ownershipTolerance', 0, 20)
+num('scroll.smoothWindowMs', 0, 5000, true)
+num('scroll.userScrollWindowMs', 0, 5000, true)
+num('scroll.yieldWindowMs', 0, 5000, true)
 num('stream.maxChars', 20, 600, true)
 num('stream.clipSpeed', 100, 8000)
 num('stream.clipMin', 0.02, 1)

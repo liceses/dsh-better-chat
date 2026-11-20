@@ -165,7 +165,11 @@
     "speedTau": 0.35,
     "holdMs": 3200,
     "releaseTau": 0.45,
-    "instantAbove": 1600
+    "instantAbove": 1600,
+    "ownershipTolerance": 2,
+    "smoothWindowMs": 900,
+    "userScrollWindowMs": 600,
+    "yieldWindowMs": 200
   },
   "stream": {
     "maxChars": 140,

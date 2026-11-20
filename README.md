@@ -198,7 +198,7 @@ src/client/session/
 - 地址栏加 hash：`http://127.0.0.1:11778/#caui-probe`，刷新；
 - 或控制台 `localStorage.setItem('caui:probe','1')` 后刷新；关掉是 `localStorage.removeItem('caui:probe')`。
 
-右下角会出现一个 HUD（`top / content / tail / vel / pace / stick / Δ fps`），记录是**环形缓冲**（6000 条），关掉探针即停止。
+右下角会出现一个 HUD（`top / content / margin`、`rate / target`、`Δ`，末尾是 fps 与条数），记录是**环形缓冲**（6000 条），关掉探针即停止。
 
 **取数据**（控制台）：
 
@@ -215,12 +215,11 @@ __cauiProbe.off()       // 停止记录
 
 | `kind` | 含义 |
 | --- | --- |
-| `tick` | 跟随循环每帧（节流 50ms）：`top / content / space / vel / pace / stick / moved` |
-| `scroll` | 每个 scroll 事件：`top / delta / ours`（是否我们写的）`/ stick / h` |
-| `external` | 每帧自查发现「位置被别人动过」：`top / delta / stick`（不依赖 scroll 事件，事件被推迟时也能抓到） |
-| `space` | 尾部占位（余量）变化：`from / to` |
+| `tick` | 跟随循环每帧（节流 50ms），字段就是 `FollowFrame`：`top / content / margin / target / rate / moved / dt / stick` |
+| `scroll` | 每个 scroll 事件：`top / delta / ours`（是否我们写的）`/ w`（我们的基准）`/ stick / h` |
+| `external` | 每帧自查发现「位置被别人动过」：`top / delta`（相对基准）`/ stick`（不依赖 scroll 事件，事件被推迟时也能抓到） |
 | `mut` | 消息流 DOM 变更：`n / h / top / rows / lastH` |
-| `unstick` | 停止跟随的原因：`by: wheel｜touch` |
+| `unstick` | 停止跟随的原因：`by: wheel｜touch｜scroll` |
 
 **复现一次跳动的流程**：`__cauiProbe.clear()` → 正常用（滚轮、拖选、切会话）→ 跳动发生时立刻 `__cauiProbe.save()`，把 JSON 发我；或者直接贴 `__cauiProbe.tail(60)`。
 

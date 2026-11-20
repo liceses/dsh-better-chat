@@ -16,6 +16,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { cls } from './classes'
 import { MOTION } from './motion-config'
 import { createFollowState, stepFollow, type FollowState } from './scroll-follow'
+import { type FollowFrame } from './scroll-frame'
+import { createOwnership, resolveScroller, type Ownership } from './scroll-ownership'
 import { probeHud, probeInstall, probeLog, probeLogged, probeTick } from './scroll-probe'
 import { cx } from './util'
 import { reducedMotion } from './motion'
@@ -43,12 +45,16 @@ export interface StickToBottomResult {
   scrollToBottom: (behavior?: ScrollBehavior) => void
 }
 
-/** 原生会话壳在消息流外层提供滚动容器；有它时不要再套一层内部滚动。 */
-function resolveOwner (container: HTMLElement | null, forceInner = false): HTMLElement | null {
-  if (container === null) return null
-  if (forceInner) return container
-  const outer = container.closest('[data-conversation-scroll]')
-  return outer instanceof HTMLElement ? outer : container
+/**
+ * 惰性建一个稳定的位移归属句柄：每次渲染都新建会把基准丢掉。
+ * @param ref - 保存句柄的可空 ref。
+ * @returns 本组件实例唯一的归属句柄。
+ */
+function ensureOwnership (ref: { current: Ownership | null }): Ownership {
+  if (ref.current === null) {
+    ref.current = createOwnership({ tolerance: MOTION.scroll.ownershipTolerance })
+  }
+  return ref.current
 }
 
 /** SSR 下 useLayoutEffect 会告警，这里退化到 useEffect。 */
@@ -73,8 +79,9 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   const followRef = useRef<FollowState | null>(null)
   /** 上一帧时刻（只用于探针记录 dt）。 */
   const lastTickAtRef = useRef(0)
-  /** 上一次由程序写进去的 scrollTop：用来区分「我们的位移」和「用户上滚」。 */
-  const writtenRef = useRef(-1)
+  /** 位移归属：记住我们最后写进去的 scrollTop，用来区分「我们的位移」和「用户上滚」。 */
+  const ownershipRef = useRef<Ownership | null>(null)
+  const ownership = ensureOwnership(ownershipRef)
   /** 用户最近一次自己滚动的时刻：避免在他滚动时做「直接落位」之类的动作。 */
   const userScrollAtRef = useRef(0)
   /** 探针用：最近一次 scrollTop 变化的来源与幅度。 */
@@ -94,12 +101,12 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   const follow = useCallback((behavior: ScrollBehavior = 'auto') => {
     // 动态解析宿主滚动容器：effect 的注册顺序不该影响「跟到底」命中谁。
     const base = containerRef.current
-    const element = base === null ? null : resolveOwner(base, forceInner)
+    const element = base === null ? null : resolveScroller({ container: base, forceInner }).element
     if (element === null) return
     const top = element.scrollHeight
     if (behavior === 'auto' || typeof element.scrollTo !== 'function') {
       element.scrollTop = top
-      writtenRef.current = element.scrollTop
+      ownership.write(element.scrollTop)
       followRef.current = null
       return
     }
@@ -109,14 +116,14 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       // 某些环境（jsdom / 旧 WebView）没有平滑滚动实现，退回直接赋值。
       element.scrollTop = top
     }
-  }, [containerRef, forceInner])
+  }, [containerRef, forceInner, ownership])
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     stickRef.current = true
     setAtBottom(true)
     cancelTween()
     const resolved: ScrollBehavior = reducedMotion() ? 'auto' : behavior
-    if (resolved !== 'auto') programmaticUntilRef.current = Date.now() + 900
+    if (resolved !== 'auto') programmaticUntilRef.current = Date.now() + MOTION.scroll.smoothWindowMs
     follow(resolved)
   }, [follow])
 
@@ -137,7 +144,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
   const settle = useCallback(function step (): void {
     if (tweenRef.current !== null) return
     const base = containerRef.current
-    const element = base === null ? null : resolveOwner(base, forceInner)
+    const element = base === null ? null : resolveScroller({ container: base, forceInner }).element
     if (element === null) return
 
     const now = (): number => (typeof performance === 'object' ? performance.now() : Date.now())
@@ -147,29 +154,34 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       const at = now()
       const viewport = element.clientHeight
       const contentHeight = element.scrollHeight
+      const frameMs = lastTickAtRef.current === 0 ? 0 : Math.max(0, at - lastTickAtRef.current)
+      lastTickAtRef.current = at
 
       // 跨度太大（切会话、恢复滚动位置）：直接落位，别慢慢滑半屏。
-      const busyUser = Date.now() - userScrollAtRef.current < 600
+      const busyUser = Date.now() - userScrollAtRef.current < MOTION.scroll.userScrollWindowMs
       if (!busyUser && element.scrollHeight - element.clientHeight - element.scrollTop > MOTION.scroll.instantAbove) {
         if (stickRef.current) {
           element.scrollTop = element.scrollHeight
-          writtenRef.current = element.scrollTop
+          ownership.write(element.scrollTop)
         }
         followRef.current = null
         return
       }
 
       // 兜底：scroll 事件在某些环境下会被推迟（后台标签、被遮挡的窗口），
-      // 所以这里每帧自查一次「位置是不是被别人动过」。自己写的值记在 writtenRef，
-      // 只要实际值和它差 ≥2px，就说明是用户动了。
-      const expectedTop = writtenRef.current
+      // 所以这里每帧自查一次「位置是不是被别人动过」：实际值与基准（我们最后
+      // 写进去的坐标）差得超过容差，就说明是别人动了。
       const actualTop = element.scrollTop
-      if (expectedTop >= 0 && Math.abs(actualTop - expectedTop) >= 2) {
-        const delta = actualTop - lastTopRef.current
+      const verdict = ownership.classify(actualTop)
+      if (verdict.source === 'external') {
         lastTopRef.current = actualTop
-        probeLog('external', { top: Math.round(actualTop), delta: Math.round(delta), stick: stickRef.current ? 1 : 0 })
+        probeLog('external', {
+          top: Math.round(actualTop),
+          delta: Math.round(verdict.delta),
+          stick: stickRef.current ? 1 : 0,
+        })
         userScrollAtRef.current = Date.now()
-        if (delta < -2 && stickRef.current) {
+        if (verdict.direction === 'up' && stickRef.current) {
           cancelTween()
           setStick(false)
           settle()
@@ -179,15 +191,17 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
 
       if (!stickRef.current) {
         // 不跟随时也留一条记录：验收要能证明「上滚之后确实有帧在跑、且没写」。
-        probeTick({
+        const idleFrame: FollowFrame = {
           top: Math.round(element.scrollTop),
           content: Math.round(contentHeight),
           margin: 0,
           target: Math.round(Math.max(0, element.scrollHeight - viewport)),
           rate: 0,
           moved: 0,
+          dt: Math.round(frameMs),
           stick: 0,
-        })
+        }
+        probeTick(idleFrame)
         return
       }
 
@@ -195,14 +209,12 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       const result = stepFollow(state, { height: contentHeight, viewport, at, config: MOTION.scroll })
       followRef.current = result.state
 
-      const frameMs = lastTickAtRef.current === 0 ? 0 : Math.max(0, at - lastTickAtRef.current)
-      lastTickAtRef.current = at
       const before = element.scrollTop
       element.scrollTop = result.position
-      writtenRef.current = element.scrollTop
+      ownership.write(element.scrollTop)
       const moved = element.scrollTop - before
       if (Math.abs(moved) >= 0.5) lastMoveRef.current = { delta: moved, source: 'loop' }
-      probeTick({
+      const frame: FollowFrame = {
         top: Math.round(element.scrollTop),
         content: Math.round(contentHeight),
         margin: Math.round(result.margin),
@@ -211,7 +223,8 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
         moved: Math.round(moved),
         dt: Math.round(frameMs),
         stick: 1,
-      })
+      }
+      probeTick(frame)
       probeHud([
         'top ' + Math.round(element.scrollTop) + '  content ' + Math.round(contentHeight) + '  margin ' + Math.round(result.margin),
         'rate ' + Math.round(result.rate) + '  target ' + Math.round(result.target),
@@ -221,7 +234,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       tweenRef.current = requestAnimationFrame(tick)
     }
     tweenRef.current = requestAnimationFrame(tick)
-  }, [containerRef, forceInner])
+  }, [containerRef, forceInner, ownership])
 
   // revision 变化（新消息 / 新 token）时：贴底就立即跟到底；挂载时同样执行一次。
   useIsoLayoutEffect(() => {
@@ -241,7 +254,8 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
     const container = containerRef.current
     if (container === null) return
     const content = contentRef.current
-    const owner = resolveOwner(container, forceInner)
+    const resolved = resolveScroller({ container, forceInner })
+    const owner = resolved.element
     if (owner === null) return
     // 只有「滚动容器真的换了」才重置基准。这个 effect 在每次 revision
     // （新消息 / 新 token / 新行）变化时都会重跑——如果每次都把 lastTopRef
@@ -250,11 +264,11 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
     if (ownerRef.current !== owner) {
       ownerRef.current = owner
       lastTopRef.current = owner.scrollTop
-      // 基准必须是一个真实坐标，不能用 -1 这种哨兵：挂载时 revision effect
-      // 可能已经先写过一次，这里再置 -1 会让自查永远跳过（expectedTop >= 0 不成立）。
-      writtenRef.current = owner.scrollTop
+      // 基准必须是一个真实坐标，不能留空：挂载时 revision effect 可能已经先写过
+      // 一次，这里把基准对齐到当前位置，自查才不会永远跳过。
+      ownership.write(owner.scrollTop)
       followRef.current = null
-      setOuter(owner !== container)
+      setOuter(resolved.reason === 'outer')
     }
 
     const scheduleFollow = () => {
@@ -276,16 +290,16 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       // 只把自己写进去的那个值当成「程序位移」；不能因为跟随循环正在跑就忽略
       // 所有滚动事件——那会把用户的上滚吞掉，然后他被强行拉回底部（看起来就是
       // 「自己滚着滚着突然往上一跳」）。
-      const ours = writtenRef.current >= 0 && Math.abs(currentTop - writtenRef.current) < 4
+      const verdict = ownership.classify(currentTop)
       probeLog('scroll', {
         top: Math.round(currentTop),
         delta: Math.round(delta),
-        w: Math.round(writtenRef.current),
-        ours: ours ? 1 : 0,
+        w: Math.round(ownership.baseline ?? currentTop),
+        ours: verdict.source === 'ours' ? 1 : 0,
         stick: stickRef.current ? 1 : 0,
         h: Math.round(owner.scrollHeight),
       })
-      if (ours) return
+      if (verdict.source === 'ours') return
       lastMoveRef.current = { delta, source: 'user' }
       userScrollAtRef.current = Date.now()
 
@@ -293,8 +307,8 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       const distance = owner.scrollHeight - currentTop - owner.clientHeight
       // 只有「用户自己往下滚回底部」才重新吸附。判据不是事件之间的 delta
       // （每帧自查会把它抹成 0），而是「当前位置在我们最后一次写入的下方」：
-      // 浏览器夹边只会往上夹，用户往下滚才会越过 writtenRef。
-      const movedDownByUser = currentTop > writtenRef.current + 2
+      // 浏览器夹边只会往上夹，用户往下滚才会越过基准。
+      const movedDownByUser = verdict.direction === 'down'
       if (distance <= STICK_THRESHOLD && movedDownByUser) {
         programmaticUntilRef.current = 0
         setStick(true)
@@ -303,9 +317,9 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       }
       if (distance <= STICK_THRESHOLD) return
       if (Date.now() < programmaticUntilRef.current) return
-      // 只有 scrollTop 真的减少才算用户上滚。流式内容变高时，浏览器滚动锚定
-      // 会把 scrollTop 往下推（delta > 0），那不是用户意图，不能停止跟随。
-      if (delta < -2) {
+      // 只有 scrollTop 真的减少（超过容差）才算用户上滚。流式内容变高时，
+      // 浏览器滚动锚定会把 scrollTop 往下推（delta > 0），那不是用户意图。
+      if (delta < -MOTION.scroll.ownershipTolerance) {
         probeLog('unstick', { by: 'scroll', delta: Math.round(delta) })
         programmaticUntilRef.current = 0
         cancelTween()
@@ -322,7 +336,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       if (event.deltaY >= 0) return
       probeLog('unstick', { by: 'wheel', delta: Math.round(event.deltaY) })
       if (stickRef.current === false) return
-      programmaticUntilRef.current = Date.now() + 200
+      programmaticUntilRef.current = Date.now() + MOTION.scroll.yieldWindowMs
       cancelTween()
       setStick(false)
       // 循环还要跑：不跟随时它只负责把占位收回，不碰滚动位置。
@@ -331,7 +345,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
     const onTouchStart = (): void => {
       probeLog('unstick', { by: 'touch' })
       if (stickRef.current === false) return
-      programmaticUntilRef.current = Date.now() + 200
+      programmaticUntilRef.current = Date.now() + MOTION.scroll.yieldWindowMs
       cancelTween()
       setStick(false)
       settle()
@@ -383,7 +397,7 @@ export function useStickToBottom<E extends HTMLElement = HTMLElement> ({
       }
     }
     // revision 变化时重挂一次：容器若是后挂载的（空态 → 消息流），也能接上观察器。
-  }, [containerRef, contentRef, revision, follow, settle, cancelTween, setStick, forceInner])
+  }, [containerRef, contentRef, revision, follow, settle, cancelTween, setStick, forceInner, ownership])
 
   return { atBottom, outer, scrollToBottom }
 }
