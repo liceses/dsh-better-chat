@@ -168,7 +168,7 @@ src/client/chat-a2ui/
   ChatImage.tsx                  图片与灯箱
   Reasoning.tsx                  思考过程
   BranchButton.tsx               从此分支
-  ScrollToBottom.tsx             贴底滚动（Chat 视图强制内滚动）
+  ScrollToBottom.tsx             贴底滚动的适配层：容器解析、rAF 循环、事件接线
   style.ts                       样式组合层：六块按固定顺序拼好 + 动效变量块
   styles/base.ts                 重置与根变量、滚动骨架、外层滚动、主题变量、P0.6 玻璃变量
   styles/flow.ts                 消息流：空态、行、气泡、附件、思考、工具卡、Markdown、提示
@@ -182,6 +182,7 @@ src/client/chat-a2ui/
   motion-scope.ts                useMotionAttribute：data-motion 的唯一出口
   motion-preference.ts           档位状态（full / reduced）与切换
   motion.ts                      存量兼容层：只剩 spring / layoutSpring / reducedMotion
+  follow-controller.ts           跟随状态机：贴不贴底、写多少、什么时候让位（五个入口都问它）
   scroll-follow.ts               跟随物理：位置独立、单帧位移 ≤ maxSpeed×dt
   scroll-ownership.ts            谁是滚动体、这次位移是谁写的
   scroll-frame.ts                每帧观测的形状（FollowFrame）
