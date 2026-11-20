@@ -5,7 +5,7 @@
  *   npm run lint:motion
  *
  * 判据（与 README「动效体系」一节一致）：
- * 1. `src/client/chat-a2ui/**` 里（motion*.ts / style*.ts 除外）不许出现
+ * 1. `src/client/chat-a2ui/**` 里（motion*.ts / style*.ts / styles/*.ts 除外）不许出现
  *    duration / delay / ease / stiffness / damping / mass 的字面量；
  * 2. `duration: 0` 放行（reduced 档的合法写法）；
  * 3. 白名单 motion-allowlist.json 逐条记录存量，匹配用「文件 + 该行文本」，
@@ -21,7 +21,8 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const SRC = join(ROOT, 'src', 'client', 'chat-a2ui')
 const ALLOWLIST = join(ROOT, 'motion-allowlist.json')
 
-const SKIP = /(^|\/)(motion(-[a-z]+)?\.ts|style(-p06)?\.ts|scroll-follow\.ts|scroll-probe\.ts)$/
+// styles/*.ts 是按表面拆开的样式表分块，和 style*.ts 一样只有 CSS，没有动效实现。
+const SKIP = /(^|\/)(motion(-[a-z]+)?\.ts|style(-p06)?\.ts|styles\/[a-z]+\.ts|scroll-follow\.ts|scroll-probe\.ts)$/
 // 只抓「值就是字面量」的写法：duration: 0.16 / ease: 'easeOut' / stiffness: 300。
 // duration: baseDuration 这种变量、ease: tokens.ease.out 这种引用都不算。
 const KEYS = /(\bduration\b|\bdelay\b|\bease\b|\beasing\b|\bstiffness\b|\bdamping\b|\bmass\b)\s*:\s*(-?\d|'|")/

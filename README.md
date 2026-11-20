@@ -168,8 +168,14 @@ src/client/chat-a2ui/
   Reasoning.tsx                  思考过程
   BranchButton.tsx               从此分支
   ScrollToBottom.tsx             贴底滚动（Chat 视图强制内滚动）
-  style.ts                       基础 CSS（注入一次）+ 动效变量块
+  style.ts                       样式组合层：六块按固定顺序拼好 + P0.6 + 动效变量块
   style-p06.ts                   P0.6 软玻璃、动效开关、暗色主题
+  styles/base.ts                 重置与根变量、滚动骨架、外层滚动、主题变量
+  styles/flow.ts                 消息流：空态、行、气泡、附件、思考、工具卡、Markdown、提示
+  styles/composer.ts             输入区：空白会话把常驻输入框压底、抽屉里隐藏自带输入框
+  styles/list.ts                 左栏会话列表与侧栏行图标
+  styles/lightbox.ts             灯箱（顶层选择器，不套 .caui-root）
+  styles/misc.ts                 Chat 模式页面外壳、轨迹抽屉、状态页、页面级断点
   motion-config.ts               读 motion.config.json：类型 / 兜底 / 校验
   motion.ts                      spring 与行入场退场（从配置派生）
 src/client/session/
@@ -260,7 +266,7 @@ npm run lint:motion    # 组件里出现手写 duration / ease / stiffness 就�
 
 存量写在 `motion-allowlist.json`：**只许减**（条目数有上限，且每条必须仍能命中；失效条目也报错）。B3 之后已清零（`0/0`），新代码没有任何豁免空间。
 
-CSS 侧同样走令牌：`style.ts` / `style-p06.ts` 里的过渡时长与缓动全部是 `var(--caui-dur-*)` / `var(--caui-ease-*)`，所以「改一个数，framer 与 CSS 一起变」。
+CSS 侧同样走令牌：`styles/*.ts` / `style-p06.ts` 里的过渡时长与缓动全部是 `var(--caui-dur-*)` / `var(--caui-ease-*)`，所以「改一个数，framer 与 CSS 一起变」。
 
 ## 滚动跟随的验收标准
 

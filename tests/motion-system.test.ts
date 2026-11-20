@@ -151,10 +151,11 @@ describe('动效系统的死层门禁', () => {
   })
 
   it('data-motion 只从 motion-scope.ts 输出，四个子树根都走 useMotionAttribute', () => {
-    // style.ts / style-p06.ts 里的 data-motion 是 CSS 选择器（消费方），不是写入方。
+    // 样式表（style.ts / style-p06.ts / styles/*.ts）里的 data-motion 是 CSS 选择器（消费方），不是写入方。
     const cssFiles = new Set(['src/client/chat-a2ui/style.ts', 'src/client/chat-a2ui/style-p06.ts'])
+    const cssDir = 'src/client/chat-a2ui/styles/'
     const writers = sourceFiles()
-      .filter(file => !cssFiles.has(file.rel))
+      .filter(file => !cssFiles.has(file.rel) && !file.rel.startsWith(cssDir))
       .filter(file => readFileSync(file.abs, 'utf8').includes('data-motion'))
       .map(file => file.rel)
     expect(writers).toEqual(['src/client/chat-a2ui/motion-scope.ts'])
