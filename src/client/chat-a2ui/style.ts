@@ -5,14 +5,16 @@
  * 由 useChatStyles() 在需要时一次性注入 document.head。
  * 样式表常驻即可，插件卸载时不需要移除（宿主会整体刷新页面）。
  *
- * 样式按表面切成六块（见 styles/），再加上最后接的 P0.6 视觉层（style-p06.ts），
- * 一共七块；这里只负责按固定顺序拼起来：
- * base → flow → composer → list → lightbox → misc → P0.6。
+ * 样式按表面切成六块（见 styles/），这里只负责按固定顺序拼起来：
+ * base → flow → composer → list → lightbox → misc。
  * 顺序有意义：同一元素上的低特异性规则仍靠先后手决定胜负，
  * 调整拼接顺序等于调整样式，tests/style-split.test.ts 会盯住它。
+ *
+ * P0.6 那一层（原来的第七块 style-p06.ts）已经 diff 回各自表面：每条规则按
+ * 选择器落进它所属的块末尾，「谁覆盖谁」变成同一个文件里的就近顺序。
+ * 跨表面覆盖的少数几条留在最后的 misc.ts 末尾，由级联等价性测试登记。
  */
 
-import { P06_CSS } from './style-p06'
 import { motionCssVars } from './motion-config'
 import { BASE_CSS } from './styles/base'
 import { FLOW_CSS } from './styles/flow'
@@ -28,7 +30,8 @@ export const CHAT_STYLE_ATTR = 'data-dsh-chat-a2ui'
 export const MOTION_VARS_ATTR = 'data-caui-motion-vars'
 
 /**
- * 完整样式表。
+ * 完整样式表：六块按固定顺序拼接，末尾不再接任何东西。
+ * 拼接顺序就是层叠顺序 —— 后一块的同特异性规则压住前一块。
  * 作用域：除灯箱外，所有选择器都限定在 .caui-root 之下。
  * 灯箱渲染到 document.body（避免被滚动容器裁剪），因此是顶层选择器。
  */
@@ -39,7 +42,7 @@ export const CHAT_CSS = [
   LIST_CSS,
   LIGHTBOX_CSS,
   MISC_CSS,
-].join('\n') + P06_CSS
+].join('\n')
 
 /** 已经注入过样式的文档（同一实例可能被嵌进多个文档）。 */
 const injectedDocs = new WeakSet<Document>()

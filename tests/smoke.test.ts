@@ -17,10 +17,10 @@ describe('scaffold', () => {
 
   // P0.7：左栏对齐原生侧栏沟槽，过程行收成内容宽的旁注。
   // 这几条都是被量出来过的几何约定，改动它们会立刻破坏该页面的对称性。
+  // 沟槽本身（.caui-chat-list 的 margin）由 styles/list.ts 与 style-split.test.ts 的块级断言看住，
+  // 这里不再重复断言子串。
   it('keeps the P0.7 sidebar gutter and inline process rows', async () => {
     const { CHAT_CSS } = await import('../src/client/chat-a2ui/style')
-    // 卡片左右边缘回到原生导航行的 14–266 沟槽
-    expect(CHAT_CSS).toContain('margin: 6px 14px 6px 2px')
     // 表头 / 新对话 / 会话行共用一个 8px 内缩
     expect(CHAT_CSS).toContain('.caui-chat-new::after')
     // 滚动条不再从行宽里吃掉 10px，行与按钮右边缘才能对齐

@@ -8,6 +8,20 @@
  * 移动端断点（max-width: 640px）里同时改了消息流的留白和灯箱的内边距：
  * 它必须排在灯箱之后才能压住灯箱的默认值，因此整块留在这里，
  * 而不是拆到 flow.ts。
+ *
+ * B Soft glass（原 P0.6 视觉层）的增量已并回本块末尾：页面底纹与玻璃头部、
+ * 工具条按钮、轨迹抽屉与状态页按钮。其中两个 @media（900 / 640）打包了
+ * 横跨消息流 / 左栏 / 页面的收窄规则 —— 整块不能拆（拆开会多出规则边界），
+ * 而且必须排在 list / flow 的同名规则之后才压得住，所以整块留在本块末尾。
+ *
+ * 最后 4 条是「跨表面覆盖」：.caui-user / .caui-user-bubble / .caui-assistant-text
+ * 与 .caui-markdown / .caui-reasoning-summary 与 .caui-tool-header 属于消息流，
+ * 但今天靠「P0.6 整层排在最后」压住本块 640 断点里的旧值。合并后若留在 flow 块，
+ * 顺序会颠倒 —— 那是行为变化，因此显式钉在本文件结尾，由
+ * tests/style-split.test.ts 的级联等价性看住。
+ *
+ * 轨迹抽屉的宽度由 ChatWorkspace 的 framer（animate={{ width: 360 }}）独占：
+ * 这里只留 max-width 兜底窄屏，不再用 !important 抢 width 的所有权。
  */
 export const MISC_CSS = `
 
@@ -298,13 +312,15 @@ export const MISC_CSS = `
     padding: 0 7px;
   }
 
+  /* 宽度由 ChatWorkspace 的 framer（animate={{ width: 360 }}）独占写出：
+     这里不写 width，也不加 !important，只用 max-width 兜住窄屏。 */
   .caui-chat-dock {
     position: absolute;
     z-index: 20;
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(88vw, 360px) !important;
+    max-width: min(88vw, 360px);
     box-shadow: var(--caui-shadow);
   }
 
@@ -403,4 +419,233 @@ export const MISC_CSS = `
     font-size: 12px;
     padding: 8px 10px;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   B Soft glass（原 P0.6 视觉层）已并回本块
+   --------------------------------------------------------------------------- */
+
+.caui-chat-page {
+  background:
+    radial-gradient(1100px 520px at 12% -8%, rgba(110, 123, 255, 0.14), transparent 62%),
+    radial-gradient(900px 480px at 100% 0%, rgba(90, 200, 190, 0.10), transparent 58%),
+    var(--caui-bg);
+}
+
+.caui-chat-workspace {
+  background: transparent;
+}
+
+.caui-chat-header {
+  position: relative;
+  z-index: 3;
+  min-height: 60px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--caui-glass-border);
+  background: var(--caui-glass-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), var(--caui-glass-shadow-soft);
+  backdrop-filter: blur(var(--caui-glass-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--caui-glass-blur)) saturate(150%);
+}
+
+.caui-chat-header-main {
+  gap: 9px;
+}
+
+.caui-chat-title {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.caui-chat-subtitle {
+  color: var(--caui-muted);
+  font-size: 11.5px;
+  min-height: 15px;
+}
+
+.caui-chat-shimmer {
+  display: inline-block;
+  perspective: 500px;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.caui-shimmer-char {
+  display: inline-block;
+  white-space: pre;
+  transform-style: preserve-3d;
+}
+
+.caui-chat-header-actions {
+  gap: 6px;
+}
+
+.caui-chat-icon-button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.caui-chat-toolbar-button {
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 10px;
+  font-size: 12.5px;
+}
+
+.caui-chat-toolbar-primary {
+  border-color: var(--caui-glass-border);
+  background: var(--caui-glass-bg-strong);
+  color: var(--caui-fg);
+  box-shadow: var(--caui-glass-shadow-soft);
+}
+
+.caui-chat-toolbar-primary:hover:not(:disabled) {
+  border-color: var(--caui-accent);
+  background: var(--caui-accent-soft);
+  color: var(--caui-accent);
+}
+
+.caui-chat-toolbar-active {
+  border-color: var(--caui-glass-border);
+  background: var(--caui-glass-bg-strong);
+  color: var(--caui-fg);
+  box-shadow: var(--caui-glass-shadow-soft);
+}
+
+.caui-chat-dock {
+  border-left: 1px solid var(--caui-glass-border);
+  background: var(--caui-glass-bg);
+  box-shadow: var(--caui-glass-shadow);
+  backdrop-filter: blur(var(--caui-glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--caui-glass-blur)) saturate(140%);
+}
+
+.caui-chat-dock-head {
+  height: 52px;
+  border-bottom-color: var(--caui-glass-border);
+}
+
+.caui-chat-main :is(
+  button[aria-label^="访问模式"],
+  button[aria-label^="权限模式"],
+  button[aria-label^="Access mode"],
+  button[aria-label^="Permission"],
+  [data-slot="conversation.input.permission"]
+) {
+  display: none !important;
+}
+
+.caui-chat-status-mark {
+  border-color: var(--caui-glass-border);
+  background: var(--caui-glass-bg-strong);
+  box-shadow: var(--caui-glass-shadow-soft);
+}
+
+.caui-chat-primary {
+  border-color: var(--caui-accent);
+  background: var(--caui-accent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--caui-accent) 24%, transparent);
+}
+
+.caui-chat-secondary {
+  border-color: var(--caui-glass-border);
+  background: var(--caui-glass-bg);
+}
+
+@media (max-width: 900px) {
+  /* 只收紧内边距：横向那两处 margin 是对齐宿主沟槽用的，与窗口宽度无关 */
+  .caui-chat-list {
+    padding: 6px 6px 6px;
+  }
+
+  .caui-chat-header {
+    padding: 9px 12px;
+  }
+
+  .caui-chat-toolbar-button {
+    padding: 0 9px;
+  }
+}
+
+@media (max-width: 640px) {
+  .caui-flow {
+    gap: 16px;
+    padding: 18px 14px 30px;
+  }
+
+  .caui-empty {
+    min-height: 260px;
+    padding: 36px 18px 32px;
+  }
+
+  .caui-empty-title {
+    font-size: 21px;
+  }
+
+  .caui-empty-suggestion {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .caui-tool-status-text {
+    display: none;
+  }
+
+  .caui-chat-header-main {
+    gap: 6px;
+  }
+
+  .caui-chat-title {
+    font-size: 14px;
+  }
+
+  .caui-chat-new {
+    height: 38px;
+  }
+
+  .caui-chat-row {
+    min-height: 44px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   跨表面覆盖：下面 4 条属于消息流，但必须排在 misc 自己的 640 断点之后
+
+   今天它们靠「P0.6 整层排在最后」压住 640 断点里的旧值：
+   .caui-user 92% / .caui-user-bubble 9px 12px / .caui-assistant-text 与
+   .caui-markdown 14.5px / .caui-tool-header 8px。合并后若留在 flow 块，
+   顺序颠倒会让这些旧值反过来赢 —— 那是行为变化。因此显式钉在末尾，
+   归属由 tests/style-split.test.ts 的级联等价性看住。
+   --------------------------------------------------------------------------- */
+
+.caui-assistant-text,
+.caui-markdown {
+  font-size: 15.5px;
+  line-height: 1.75;
+}
+
+.caui-user {
+  max-width: min(680px, 84%);
+  gap: 7px;
+}
+
+.caui-user-bubble {
+  padding: 11px 15px;
+  border-radius: 18px 18px 6px 18px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--caui-accent) 86%, #ffffff), var(--caui-accent));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--caui-accent) 22%, transparent);
+}
+
+.caui-reasoning-summary,
+.caui-tool-header {
+  width: auto;
+  max-width: 100%;
+  padding: 2px 14px 2px 0;
+  gap: 6px;
+  color: var(--caui-muted);
+  font-size: 12px;
 }`

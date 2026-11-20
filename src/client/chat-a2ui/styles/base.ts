@@ -1,14 +1,22 @@
 /**
- * 基础层：重置、根设计变量、滚动骨架。
+ * 基础层：重置、根设计变量、滚动骨架、跨表面共用的原语。
  *
  * 这是最先拼上的一块，后面五块都建立在它的变量与重置之上：
  * 1. 重置：box-sizing、:focus-visible、字体与颜色初始化；
  * 2. 设计变量：--caui-* 桥接宿主的 --dsw-*，全部带亮色回退值；
  * 3. 骨架：.caui-viewport（滚动容器）与 .caui-flow（消息流列宽）；
  * 4. 外层滚动：原生 conversation 自己拥有滚动时的根 / viewport / flow 变体；
- * 5. 主题：暗色 / 亮色变量（含 Chat 模式页面与左栏列表的变量桥）。
+ * 5. 主题：暗色 / 亮色变量（含 Chat 模式页面与左栏列表的变量桥）；
+ * 6. B Soft glass（原 P0.6 视觉层，已并回本块）：玻璃底色、描边、阴影、圆角
+ *    与 4 个循环时长，连同 @supports 不支持 backdrop-filter 时的回退、
+ *    prefers-color-scheme、[data-theme="dark"|"light"] 与宿主 body[data-ds-dark-theme]
+ *    三套主题桥 —— 它们都只关心「变量的最终值」，所以和基础变量同块；
+ * 7. 跨表面原语：TextEffect / TextScramble 的类名（空态标题与 Chat 空态标题共用一份，
+ *    所以既不随 flow 也不随 composer）。
  *
- * 跨块的通用规则（变量、字体、重置）一律留在这里，不跟着用它的规则走。
+ * 跨块的通用规则（变量、字体、重置、跨表面原语）一律留在这里，不跟着用它的规则走。
+ * 顺序即语义：默认值在上、主题覆盖在下、B Soft glass 的玻璃值压在本块末尾，
+ * 「谁覆盖谁」就写在这个文件的先后里，不再靠 style.ts 末尾再拼一层。
  */
 export const BASE_CSS = `
 /* =============================================================================
@@ -286,4 +294,194 @@ export const BASE_CSS = `
   --caui-ok: var(--dsw-success, #2f9e6b);
   --caui-warn: var(--dsw-warning, #b7791f);
   --caui-shadow: var(--dsw-shadow-popover, 0 10px 30px rgba(15, 18, 42, 0.12));
+}
+
+/* ---------------------------------------------------------------------------
+   B Soft glass（原 P0.6 视觉层）已并回本块
+   --------------------------------------------------------------------------- */
+
+/* B Soft glass 的设计变量：玻璃底色、描边、阴影、圆角与 4 个循环时长 */
+
+.caui-root,
+.caui-chat-page,
+.caui-chat-list {
+  --caui-glass-bg: rgba(255, 255, 255, 0.72);
+  --caui-glass-bg-strong: rgba(255, 255, 255, 0.88);
+  --caui-glass-border: rgba(255, 255, 255, 0.58);
+  --caui-glass-line: rgba(20, 23, 40, 0.10);
+  --caui-glass-shadow: 0 18px 48px rgba(20, 23, 40, 0.12);
+  --caui-glass-shadow-soft: 0 8px 24px rgba(20, 23, 40, 0.08);
+  --caui-glass-blur: 18px;
+  --caui-radius-card: 14px;
+  --caui-radius-panel: 16px;
+  --caui-shimmer-base: var(--caui-muted);
+  --caui-shimmer-highlight: var(--caui-fg);
+  --caui-accent-soft: color-mix(in srgb, var(--caui-accent) 13%, transparent);
+  /* 4 个循环动画的时长：默认值在这里，运行时由 motion.config.json 覆盖
+     （useChatStyles 注入 data-caui-motion-vars）。首帧 / 无 JS 也仍有动画。 */
+  --caui-motion-caret: 1.05s;
+  --caui-motion-pulse: 1.6s;
+  --caui-motion-spin: 0.8s;
+  --caui-motion-orb: 5.4s;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .caui-root,
+  .caui-chat-page,
+  .caui-chat-list {
+    --caui-glass-bg: var(--caui-card);
+    --caui-glass-bg-strong: var(--caui-card);
+    --caui-glass-blur: 0px;
+  }
+}
+
+.caui-text-effect {
+  margin: 0;
+}
+
+.caui-text-effect-line {
+  display: block;
+}
+
+.caui-text-effect-segment,
+.caui-text-effect-char {
+  display: inline-block;
+  white-space: pre;
+}
+
+.caui-text-scramble {
+  display: inline-block;
+}
+
+.caui-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .caui-root:not([data-theme="light"]),
+  .caui-chat-page:not([data-theme="light"]),
+  .caui-chat-list:not([data-theme="light"]) {
+    --caui-glass-bg: rgba(24, 24, 30, 0.72);
+    --caui-glass-bg-strong: rgba(24, 24, 30, 0.88);
+    --caui-glass-border: rgba(255, 255, 255, 0.09);
+    --caui-glass-line: rgba(255, 255, 255, 0.10);
+    --caui-glass-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+    --caui-glass-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.28);
+    --caui-shimmer-base: #747482;
+    --caui-shimmer-highlight: #ffffff;
+  }
+
+  .caui-chat-page:not([data-theme="light"]) {
+    background:
+      radial-gradient(1100px 520px at 12% -8%, rgba(90, 104, 255, 0.18), transparent 62%),
+      radial-gradient(900px 480px at 100% 0%, rgba(50, 170, 165, 0.12), transparent 58%),
+      var(--caui-bg);
+  }
+}
+
+[data-theme="dark"] .caui-root,
+[data-theme="dark"] .caui-chat-page,
+[data-theme="dark"] .caui-chat-list,
+.caui-root[data-theme="dark"],
+.caui-chat-page[data-theme="dark"],
+.caui-chat-list[data-theme="dark"] {
+  --caui-glass-bg: rgba(24, 24, 30, 0.72);
+  --caui-glass-bg-strong: rgba(24, 24, 30, 0.88);
+  --caui-glass-border: rgba(255, 255, 255, 0.09);
+  --caui-glass-line: rgba(255, 255, 255, 0.10);
+  --caui-glass-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+  --caui-glass-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --caui-shimmer-base: #747482;
+  --caui-shimmer-highlight: #ffffff;
+}
+
+[data-theme="dark"] .caui-chat-page,
+.caui-chat-page[data-theme="dark"] {
+  background:
+    radial-gradient(1100px 520px at 12% -8%, rgba(90, 104, 255, 0.18), transparent 62%),
+    radial-gradient(900px 480px at 100% 0%, rgba(50, 170, 165, 0.12), transparent 58%),
+    var(--caui-bg);
+}
+
+[data-theme="light"] .caui-root,
+[data-theme="light"] .caui-chat-page,
+[data-theme="light"] .caui-chat-list,
+.caui-root[data-theme="light"],
+.caui-chat-page[data-theme="light"],
+.caui-chat-list[data-theme="light"] {
+  --caui-glass-bg: rgba(255, 255, 255, 0.72);
+  --caui-glass-bg-strong: rgba(255, 255, 255, 0.88);
+  --caui-glass-border: rgba(255, 255, 255, 0.58);
+  --caui-glass-line: rgba(20, 23, 40, 0.10);
+  --caui-glass-shadow: 0 18px 48px rgba(20, 23, 40, 0.12);
+  --caui-glass-shadow-soft: 0 8px 24px rgba(20, 23, 40, 0.08);
+  --caui-shimmer-base: var(--caui-muted);
+  --caui-shimmer-highlight: var(--caui-fg);
+}
+
+[data-theme="light"] .caui-chat-page,
+.caui-chat-page[data-theme="light"] {
+  background:
+    radial-gradient(1100px 520px at 12% -8%, rgba(110, 123, 255, 0.14), transparent 62%),
+    radial-gradient(900px 480px at 100% 0%, rgba(90, 200, 190, 0.10), transparent 58%),
+    var(--caui-bg);
+}
+
+/* ---------------------------------------------------------------------------
+   宿主暗色主题：body[data-ds-dark-theme]
+   宿主把深色收在 body 属性上，不是 [data-theme]，也不一定命中
+   prefers-color-scheme；这里直接读宿主的 alias token，保证与外壳一致。
+   --------------------------------------------------------------------------- */
+body[data-ds-dark-theme] .caui-root,
+body[data-ds-dark-theme] .caui-chat-page,
+body[data-ds-dark-theme] .caui-chat-list {
+  --caui-fg: var(--dsw-alias-label-primary, #e9e9ef);
+  --caui-bg: var(--dsw-alias-bg-base, #151517);
+  --caui-card: var(--dsw-alias-bg-layer-1, #1f1f23);
+  --caui-subtle: rgba(255, 255, 255, 0.055);
+  --caui-subtle-hover: rgba(255, 255, 255, 0.10);
+  --caui-muted: var(--dsw-alias-label-secondary, #a1a1aa);
+  --caui-border: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
+  --caui-border-strong: var(--dsw-alias-border-l4, rgba(255, 255, 255, 0.20));
+  --caui-accent: #4d6bfe;
+  --caui-accent-fg: #ffffff;
+  --caui-danger: #ff7b7b;
+  --caui-ok: #57c99a;
+  --caui-warn: #e0b05a;
+  --caui-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --caui-glass-bg: rgba(24, 24, 30, 0.72);
+  --caui-glass-bg-strong: rgba(24, 24, 30, 0.88);
+  --caui-glass-border: rgba(255, 255, 255, 0.10);
+  --caui-glass-line: rgba(255, 255, 255, 0.10);
+  --caui-glass-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+  --caui-glass-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --caui-shimmer-base: #747482;
+  --caui-shimmer-highlight: #ffffff;
+}
+
+body[data-ds-dark-theme] .caui-chat-page {
+  background:
+    radial-gradient(1100px 520px at 12% -8%, rgba(77, 107, 254, 0.18), transparent 62%),
+    radial-gradient(900px 480px at 100% 0%, rgba(50, 170, 165, 0.12), transparent 58%),
+    var(--caui-bg);
+}
+
+body[data-ds-dark-theme] .caui-user-bubble {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+body[data-ds-dark-theme] .caui-empty-mark {
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.22), transparent 34%),
+    linear-gradient(145deg, color-mix(in srgb, var(--caui-accent) 42%, var(--caui-card)), var(--caui-card));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }`

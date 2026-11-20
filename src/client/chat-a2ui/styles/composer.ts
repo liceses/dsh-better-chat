@@ -7,6 +7,10 @@
  *
  * 输入框本身的样式由宿主的原生 composer 负责，插件不重复造；
  * 给输入框让位的留白（--caui-composer-clearance）挂在骨架规则上，随 base.ts。
+ *
+ * B Soft glass（原 P0.6 视觉层）的增量已并回本块末尾：空态面板的 10px 间距与
+ * 190px 顶高、光球（复用 flow.ts 的 caui-orb-breathe）和标题的 TextEffect 归零边距。
+ * 它们是「空态这一块皮」的一部分，所以跟着输入区而不是消息流。
  */
 export const COMPOSER_CSS = `
 
@@ -51,4 +55,39 @@ export const COMPOSER_CSS = `
    the dock only needs the trajectory body. */
 .caui-chat-dock-conversation [data-conversation-region="composer"] {
   display: none !important;
+}
+
+/* ---------------------------------------------------------------------------
+   B Soft glass（原 P0.6 视觉层）已并回本块
+   --------------------------------------------------------------------------- */
+
+.caui-chat-blank-state {
+  gap: 10px;
+  inset: 0 0 190px;
+}
+
+.caui-chat-blank-orb {
+  width: 46px;
+  height: 46px;
+  margin-bottom: 2px;
+  border: 1px solid var(--caui-glass-border);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.9), transparent 34%),
+    linear-gradient(145deg, color-mix(in srgb, var(--caui-accent) 26%, var(--caui-card)), var(--caui-card));
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--caui-accent) 18%, transparent);
+  animation-name: caui-orb-breathe;
+  animation-duration: var(--caui-motion-orb, 5.4s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.caui-chat-blank-title {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.caui-chat-blank-title .caui-text-effect {
+  margin: 0;
 }`

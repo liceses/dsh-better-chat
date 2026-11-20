@@ -4,10 +4,20 @@
  * 空态、行容器、用户气泡、Assistant 正文与动作条、流式光标、思考过程、
  * 工具卡、本轮结束行（时间 / 分支 / token）、回到底部按钮、图片与附件、
  * 提示条、上下文旁白、命令 / 压缩 / 未知节点、新建会话、Markdown 排版。
- * 三个循环动画的 @keyframes 也只服务于这里的元素，因此随本块。
+ * 循环动画的 @keyframes 也只服务于这里的元素，因此随本块
+ * （caui-spin / caui-caret-blink / caui-pulse，以及空态光球用的 caui-orb-breathe ——
+ * 后者 Chat 空态标题也在用，但重心在消息流，仍按重心归属）。
+ *
+ * B Soft glass（原 P0.6 视觉层）的增量已并回本块末尾：流列宽与留白、
+ * 旁注式的过程行（思考 / 工具调用收成内容宽）、空态光球与建议胶囊、
+ * 浮动模糊层与回到底部按钮的玻璃底，以及 reduced 档的动画收口。
+ * 它们今天仍然压得住本块自己的基础值 —— 靠的是同一文件里靠后的位置。
  *
  * 页面外壳、左栏与输入区都不在这里；消息流自己的移动端断点落在 misc.ts
  * （那一块 @media 里还改了灯箱，级联顺序要求它排在灯箱之后）。
+ * 另外 4 条 P0.6 规则（.caui-user / .caui-user-bubble / .caui-assistant-text 与
+ * .caui-markdown / .caui-reasoning-summary 与 .caui-tool-header）必须排在 misc 的
+ * 640 断点之后才不会翻转胜负，因此显式留在 misc.ts 末尾，不在这里。
  */
 export const FLOW_CSS = `
 
@@ -1233,5 +1243,431 @@ export const FLOW_CSS = `
 @media (hover: none) {
   .caui-assistant-footer {
     opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   B Soft glass（原 P0.6 视觉层）已并回本块
+   --------------------------------------------------------------------------- */
+
+.caui-flow {
+  max-width: 780px;
+  gap: 20px;
+  padding: 26px 22px 38px;
+}
+
+.caui-assistant {
+  gap: 13px;
+}
+
+.caui-user-text {
+  font-size: 14.5px;
+  line-height: 1.68;
+}
+
+.caui-reasoning,
+.caui-tool,
+.caui-context,
+.caui-notice,
+.caui-command,
+.caui-compaction {
+  border-color: var(--caui-glass-border);
+  border-radius: var(--caui-radius-card);
+  background: var(--caui-glass-bg);
+  box-shadow: var(--caui-glass-shadow-soft);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+
+.caui-reasoning-summary {
+  padding: 10px 32px 10px 12px;
+  font-size: 12.5px;
+}
+
+.caui-reasoning-body,
+.caui-reasoning-text {
+  min-width: 0;
+}
+
+.caui-reasoning-text {
+  padding: 0 13px 12px;
+}
+
+.caui-tool {
+  position: relative;
+}
+
+.caui-tool-header {
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.caui-tool-name {
+  font-size: 12.5px;
+}
+
+.caui-tool-status-text {
+  flex: none;
+  overflow: hidden;
+  color: var(--caui-muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.caui-tool-status-text[data-state="error"] {
+  color: var(--caui-danger);
+}
+
+.caui-tool-status-text[data-state="running"] {
+  color: var(--caui-accent);
+}
+
+.caui-tool-body {
+  gap: 9px;
+  padding: 12px 13px 13px;
+  border-top-color: var(--caui-glass-line);
+  background: color-mix(in srgb, var(--caui-card) 78%, transparent);
+}
+
+.caui-tool-body .caui-tool-args,
+.caui-tool-body .caui-tool-result {
+  border-color: var(--caui-glass-line);
+  border-radius: 10px;
+}
+
+.caui-border-trail {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: inherit;
+  pointer-events: none;
+  mask-clip: padding-box, border-box;
+  mask-composite: intersect;
+  -webkit-mask-clip: padding-box, border-box;
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(transparent, transparent), linear-gradient(#000, #000);
+  -webkit-mask-image: linear-gradient(transparent, transparent), linear-gradient(#000, #000);
+}
+
+.caui-border-trail-dot {
+  position: absolute;
+  aspect-ratio: 1;
+  border-radius: 999px;
+}
+
+.caui-tool-header,
+.caui-tool-body {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---------------------------------------------------------------------------
+   过程行（思考 / 工具调用）
+   之前每个过程块都是一张铺满整列的长条卡片，流式时一屏能叠出七八条，
+   把正文挤成碎片。这里改成内容宽的旁注行：没有卡片底、没有描边，
+   只在展开时用一条左侧细线把细节挂上去。
+   --------------------------------------------------------------------------- */
+.caui-reasoning,
+.caui-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  align-self: flex-start;
+  width: auto;
+  max-width: 100%;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.caui-reasoning-summary:hover,
+.caui-tool-header:hover {
+  background: transparent;
+  color: var(--caui-fg);
+}
+
+.caui-reasoning-summary::after {
+  right: 2px;
+}
+
+/* 内容宽的行不该再把工具名截成 web_sear…，省略号留给正文里的长参数。
+   基础样式里的 max-width: 42% 是按整行宽度算的，对内容宽的表头没有意义，这里放开。 */
+.caui-tool-header .caui-tool-name {
+  flex: 0 0 auto;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* kind 徽标是卡片时代的装饰，旁注行里只留名字和状态 */
+.caui-tool-header .caui-tool-chip {
+  display: none;
+}
+
+.caui-tool-body,
+.caui-reasoning-body {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 0 4px 10px;
+  border-top: 0;
+  border-left: 1px solid var(--caui-glass-line);
+  background: transparent;
+}
+
+.caui-reasoning-text {
+  padding: 0;
+}
+
+/* 连续的过程行彼此靠近，正文前后仍保留呼吸：相邻过程行 20 → 10px */
+.caui-row-process {
+  margin-block: -5px;
+}
+
+.caui-row:has(> .caui-assistant > .caui-reasoning):not(:has(.caui-assistant-text)) {
+  margin-block: -5px;
+}
+
+/* 只有思考、没有正文的 assistant 行不需要页脚，它原本还占着 24px */
+.caui-assistant:not(:has(.caui-assistant-text)) > .caui-assistant-footer {
+  display: none;
+}
+
+/* 提示行同理：旁注不是卡片 */
+.caui-row-notice {
+  justify-content: flex-start;
+}
+
+.caui-notice {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  font-size: 12px;
+}
+
+.caui-context {
+  width: min(100%, 680px);
+  overflow: hidden;
+}
+
+.caui-context-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--caui-muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.caui-context-summary:hover {
+  color: var(--caui-fg);
+}
+
+.caui-context-summary .caui-time {
+  margin-left: auto;
+}
+
+.caui-context-chevron {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-right: 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform var(--caui-dur-sm) var(--caui-ease-out);
+}
+
+.caui-context-summary[aria-expanded="true"] .caui-context-chevron {
+  transform: rotate(225deg);
+}
+
+.caui-context-body {
+  min-width: 0;
+}
+
+.caui-context-text {
+  padding: 0 12px 10px 34px;
+}
+
+.caui-empty {
+  position: relative;
+  gap: 12px;
+  min-height: 320px;
+  padding: 48px 24px 44px;
+}
+
+.caui-empty::before {
+  content: "";
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  width: 260px;
+  height: 260px;
+  border-radius: 999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--caui-accent) 18%, transparent), transparent 68%);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.caui-empty-mark {
+  position: relative;
+  z-index: 1;
+  width: 58px;
+  height: 58px;
+  border: 1px solid var(--caui-glass-border);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.92), transparent 34%),
+    linear-gradient(145deg, color-mix(in srgb, var(--caui-accent) 30%, var(--caui-card)), var(--caui-card));
+  box-shadow: 0 18px 44px color-mix(in srgb, var(--caui-accent) 22%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  color: var(--caui-accent);
+  font-size: 23px;
+  animation-name: caui-orb-breathe;
+  animation-duration: var(--caui-motion-orb, 5.4s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.caui-empty-title {
+  position: relative;
+  z-index: 1;
+  color: var(--caui-fg);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.caui-empty-title .caui-text-effect {
+  margin: 0;
+}
+
+.caui-empty-hint {
+  position: relative;
+  z-index: 1;
+  max-width: 35em;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.caui-empty-suggestions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 580px;
+  margin-top: 6px;
+}
+
+.caui-empty-suggestion {
+  padding: 7px 12px;
+  border: 1px solid var(--caui-glass-border);
+  border-radius: 999px;
+  background: var(--caui-glass-bg);
+  box-shadow: var(--caui-glass-shadow-soft);
+  color: var(--caui-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.caui-progressive-blur {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.caui-flow-blur {
+  top: 0;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  height: 46px;
+}
+
+.caui-flow-blur-bottom {
+  top: auto;
+  bottom: 0;
+}
+
+.caui-progressive-blur-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .caui-flow-blur {
+    display: none;
+  }
+}
+
+.caui-scroll-button {
+  border-color: var(--caui-glass-border);
+  background: var(--caui-glass-bg-strong);
+  box-shadow: var(--caui-glass-shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* 减少动态：只停掉「一直转」和「位移/缩放」的那几处，
+   颜色与背景过渡保留 —— 全局把 transition-duration 压到 1ms 会让 hover
+   变成硬切，比有过渡更生硬，也会连带抹掉焦点态反馈。 */
+.caui-root[data-motion="reduced"] .caui-empty-mark,
+.caui-root[data-motion="reduced"] .caui-chat-blank-orb,
+.caui-root[data-motion="reduced"] .caui-live-dot,
+.caui-root[data-motion="reduced"] .caui-reasoning-spinner,
+.caui-root[data-motion="reduced"] .caui-tool-status[data-state="running"],
+.caui-chat-page[data-motion="reduced"] .caui-empty-mark,
+.caui-chat-page[data-motion="reduced"] .caui-chat-blank-orb,
+.caui-chat-page[data-motion="reduced"] .caui-live-dot,
+.caui-chat-page[data-motion="reduced"] .caui-reasoning-spinner,
+.caui-chat-page[data-motion="reduced"] .caui-tool-status[data-state="running"] {
+  animation: none;
+}
+
+.caui-root[data-motion="reduced"] .caui-streaming-cursor,
+.caui-chat-page[data-motion="reduced"] .caui-streaming-cursor {
+  animation: none;
+  opacity: 0.8;
+}
+
+/* 流式尾巴的模糊渐入在 reduced 档直接不播（文字照常出现） */
+.caui-root[data-motion="reduced"] .caui-md-stream-char,
+.caui-chat-page[data-motion="reduced"] .caui-md-stream-char {
+  animation: none;
+}
+
+@keyframes caui-orb-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    filter: saturate(1);
+  }
+
+  50% {
+    transform: translateY(-3px) scale(1.035);
+    filter: saturate(1.12);
   }
 }`
