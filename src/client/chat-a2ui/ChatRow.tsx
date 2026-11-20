@@ -5,7 +5,8 @@
  * 1. ChatRow 自己按 nodeKey 订阅 chat store，流式 token 只会重渲染当前这一行；
  *    父组件只负责顺序、动画和空态。
  * 2. 分派只有一张表：RowView 的 type → 渲染函数（见 RENDERERS）。
- * 3. 宿主数据的收窄全部在 row-model.ts；这里只消费 RowView，没有 unchecked cast。
+ * 3. 宿主数据的收窄全部在 row-model.ts；这里只消费 RowView。唯一的断言是把
+ *    判别联合的成员查表收敛成一次调用（RENDERERS[view.type]），它不含字段读取。
  */
 import { memo, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import type { UseChat } from './types'

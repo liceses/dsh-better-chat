@@ -17,7 +17,7 @@
 
 import { useMotionLevel } from './motion-preference'
 import { expandRole, type ExpandedRole, type MotionLevel } from './motion-roles'
-import type { RoleId } from './motion-config'
+import { MOTION, clipSeconds, type RoleId } from './motion-config'
 
 /**
  * 读一个角色的完整展开（跟随档位）。
@@ -39,12 +39,39 @@ export function useEnter (id: RoleId): Pick<ExpandedRole, 'initial' | 'animate' 
   return { initial: role.initial, animate: role.animate, transition: role.transition }
 }
 
+/** 流式文字的派生量：逐字动画 + 尾巴的行为参数，一次给全。 */
+export interface StreamValues {
+  /** 逐字模糊半径（px）；reduced 档为 0。 */
+  blur: number
+  /** 单字时长（秒）。 */
+  duration: number
+  /** 逐字错峰（秒）；reduced 档为 0。 */
+  stagger: number
+  /** 尾巴最多渲染多少个字符（超出就不再增长 DOM）。 */
+  maxChars: number
+  /** 一次到达的新内容不足阈值时，高度补间的最短时长（秒）。 */
+  clipMin: number
+  /** 新内容字数 → 高度补间时长（秒）。 */
+  clipSeconds: (grown: number) => number
+}
+
 /**
- * 流式文字：模糊半径、单字时长、错峰。
+ * 流式文字：模糊半径、单字时长、错峰，以及尾巴的行为参数。
+ *
+ * 之所以把 `maxChars` / `clipMin` / `clipSeconds` 也放在这里：它们是**同一段动效的
+ * 参数**，组件只该有一个入口。否则 Markdown 就要从 `motion-config` 再开一扇门，
+ * 「改一个数，组件不知道」的旧问题会从旁边长回来。
  * @param id - 角色名（目前只有 `text.stream`）。
- * @returns 逐字动画的三个派生量；reduced 档下 blur 与 stagger 均为 0。
+ * @returns 逐字动画与尾巴动画的全部派生量。
  */
-export function useStream (id: RoleId): { blur: number; duration: number; stagger: number } {
+export function useStream (id: RoleId): StreamValues {
   const role = useRole(id)
-  return { blur: role.blur, duration: role.duration, stagger: role.stagger }
+  return {
+    blur: role.blur,
+    duration: role.duration,
+    stagger: role.stagger,
+    maxChars: MOTION.stream.maxChars,
+    clipMin: MOTION.stream.clipMin,
+    clipSeconds,
+  }
 }

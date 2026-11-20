@@ -18,6 +18,7 @@ import { useMotionAttribute } from '../chat-a2ui/motion-scope'
 import { TextEffect } from '../chat-a2ui/motion-primitives/vendor/TextEffect'
 import { TextShimmerWave } from '../chat-a2ui/motion-primitives/vendor/TextShimmerWave'
 import { ChatInnerScrollContext } from '../chat-a2ui/scroll-context'
+import { probeLog } from '../chat-a2ui/scroll-probe'
 import { useChatStyles } from '../chat-a2ui/style'
 import type {
   UseSession,
@@ -125,6 +126,12 @@ export function ChatWorkspace ({
   const toggleTrajectory = useCallback((): void => {
     setTrajectoryOpen(open => !open)
   }, [])
+
+  // B4「切会话单次落位」需要知道「什么时候换了会话」。探针只在开启时记录，
+  // 所以这里是零成本的一条标记，而不是一条业务逻辑。
+  useEffect(() => {
+    probeLog('session', { id: sessionId.slice(0, 12) })
+  }, [sessionId])
 
   // While Chat is the active panel, the shell's own New Session affordances
   // must create a Chat conversation instead of a native Session (which would

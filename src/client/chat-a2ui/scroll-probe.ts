@@ -189,9 +189,13 @@ export function probeInstall (): void {
         return 'save failed: ' + String(error)
       }
     },
+    /** 打一条自定义标记（例如 scrolled=a 之类的场景切分）。 */
+    mark: (kind = 'mark', data: string = ''): string => { probeLog(kind, { note: data }); return 'marked ' + kind },
+    /** 打一条会话切换标记：B4「切会话单次落位」只有打了标记才判。 */
+    session: (id = ''): string => { probeLog('session', { id: String(id).slice(0, 12) }); return 'session ' + id },
     /** 模拟用户上滚（给自动化用）。 */
     scrollUp: (px = 180): string => {
-      const target = resolveScroller()
+      const target = findProbeViewport()
       if (target === null) return 'no scroller'
       target.scrollTop = Math.max(0, target.scrollTop - px)
       return 'top ' + Math.round(target.scrollTop)
@@ -202,62 +206,149 @@ export function probeInstall (): void {
      */
     check: (): string => JSON.stringify(checkEntries(current.entries), null, 1),
   }
+
+  // B5「运行期 JS 错误 = 0」必须有测量来源：错误直接进同一份日志。
+  const onError = (event: ErrorEvent): void => {
+    probeLog('error', { message: String(event.message ?? '').slice(0, 140) })
+  }
+  const onRejection = (event: PromiseRejectionEvent): void => {
+    probeLog('error', { message: String(event.reason ?? '').slice(0, 140) })
+  }
+  window.addEventListener('error', onError)
+  window.addEventListener('unhandledrejection', onRejection)
+
   ;(window as unknown as { __cauiProbe: typeof api }).__cauiProbe = api
   probeLog('install', { hash: window.location.hash.slice(0, 40) })
+}
+
+/** 一条判据的三种结局：通过 / 不通过 / 没测到。 */
+export interface Verdict {
+  ok: boolean
+  measured: boolean
+}
+
+/** `checkEntries` 的返回值：与 README「滚动跟随的验收标准」逐条对应。 */
+export interface CheckResult {
+  /** 全部判据都测到且都通过才算过。 */
+  pass: boolean
+  /** 所有判据都测到了（false 时看 unverified）。 */
+  complete: boolean
+  /** 没测到的判据编号（B1 / B2 / B4 …）。 */
+  unverified: string[]
+  evidence: { ticks: number; enough: boolean }
+  /** A1 / C1：可见位移的速度上限（px/s）。 */
+  move: { maxVelocity: number; limit: number; ok: boolean }
+  /** A3：停止后距真底部（px）。 */
+  settle: { gap: number | null; limit: number; ok: boolean; measured: boolean }
+  /** A4 / C2：生成期底部余量的最小值。 */
+  margin: { min: number | null; floor: number; c2: number; ok: boolean; measured: boolean }
+  /** B1：用户上滚后 500ms 内的跟随器写入次数。 */
+  quiet: { unsticks: number; violations: number; windowMs: number; ok: boolean; measured: boolean }
+  /** B2：用户上滚后 1s 内的位置漂移（px）。 */
+  drift: { max: number; limit: number; ok: boolean; measured: boolean }
+  /** B3：重新吸附只发生在用户往下滚过之后。 */
+  restick: { resticks: number; suspicious: number; threshold: number; ok: boolean; measured: boolean }
+  /** B4：切会话单次落位，之后 10 帧不再动。 */
+  switchLanding: { landings: number; ok: boolean; measured: boolean }
+  /** B5：运行期 JS 错误。 */
+  errors: { count: number; ok: boolean }
+}
+
+/** 各判据的阈值，全部来自 README 的表格（只有 `margin` 的 C2 线是正文里的 120）。 */
+const LIMITS = {
+  /** A3：距真底部 ≤ 1px。 */
+  settle: 1,
+  /** B1：用户上滚后的观察窗。 */
+  quietMs: 500,
+  /** B2：上滚后 1s 内漂移 ≤ 2px。 */
+  driftMs: 1000,
+  drift: 2,
+  /** B3：用户往下滚超过 2px 才允许重新吸附。 */
+  restick: 2,
+  /** B4：落位之后要求静止的帧数。 */
+  landingFrames: 10,
+  /** C2：生成期间底部余量。 */
+  marginC2: 120,
+  /** 证据下限：少于这么多帧直接不算过。 */
+  minTicks: 10,
+} as const
+
+/** 读一条 tick 的数值字段。 */
+function num (entry: ProbeEntry, key: string): number {
+  const value = Number(entry[key] ?? 0)
+  return Number.isFinite(value) ? value : 0
+}
+
+/** 在 [from, from+window) 内找某类条目。 */
+function within (entries: ProbeEntry[], from: number, windowMs: number, kind: string): ProbeEntry[] {
+  return entries.filter(entry => entry.kind === kind && entry.t >= from && entry.t < from + windowMs)
 }
 
 /**
  * 按验收标准检查一份日志。
  *
- * 判据（速度上限来自 motion.config.json 的 `scroll.maxSpeed`，和 README 的表格一一对应）：
- * - move ≤ maxSpeed×1.05  可见位移的速度不超过上限（与帧率无关）
- * - settle ≤ 2px          停下来之后贴在底部
- * - quiet                 每次用户上滚之后 40 条日志内跟随器没有再写 scrollTop
- * - restick               重新吸附只发生在「用户自己往下滚」之后
+ * 与 README「滚动跟随的验收标准」逐条对应，**只读这一份日志、只用这一处阈值**：
+ * - A1 / C1 move：速度 ≤ `scroll.maxSpeed`（与帧率无关）
+ * - A3 settle：落点 ≤ 1px（用户中途接管则视为没测到）
+ * - A4 / C2 margin：跟随帧的最小余量 ≥ `minMargin × 0.6`，且 C2 线 ≥ 120
+ * - B1 quiet：用户上滚后 500ms 内跟随器写入 0 次
+ * - B2 drift：同一窗口之后 1s 内累计漂移 ≤ 2px
+ * - B3 restick：重新吸附只发生在用户往下滚过 2px 之后
+ * - B4 switchLanding：打了 `session` 标记后单次落位、随后 10 帧不动
+ * - B5 errors：日志里 `error` 条目为 0
+ *
+ * 没测到的判据记进 `unverified`，且**不给 pass**——缺测量不等于通过。
  * @param entries - 探针日志。
  */
-export function checkEntries (entries: ProbeEntry[]): {
-  pass: boolean
-  evidence: { ticks: number; enough: boolean }
-  move: { maxVelocity: number; limit: number; ok: boolean }
-  settle: { gap: number | null; ok: boolean; takenOver: boolean }
-  quiet: { unstick: number; violated: number; ok: boolean }
-  restick: { resticks: number; suspicious: number; ok: boolean }
-  errors: number
-} {
-  // 判据是**速度**而不是每帧像素：30fps 下走 78px 与 60fps 下走 39px 是同一个
-  // 速度，都合法；按每帧像素判会把掉帧误判成缺陷。
-  const limit = MOTION.scroll.maxSpeed * 1.05
+export function checkEntries (entries: ProbeEntry[]): CheckResult {
   const ticks = entries.filter(entry => entry.kind === 'tick')
+  const unsticks = entries.filter(entry => entry.kind === 'unstick')
+  const unverified: string[] = []
+
+  // A1 / C1：速度而不是每帧像素（30fps 走 78px 与 60fps 走 39px 是同一速度）。
+  const limit = MOTION.scroll.maxSpeed
   const maxVelocity = ticks.reduce((max, entry) => {
-    const dt = Number(entry.dt ?? 0)
-    const moved = Math.abs(Number(entry.moved ?? 0))
+    const dt = num(entry, 'dt')
     if (dt <= 0) return max
-    return Math.max(max, (moved / dt) * 1000)
+    return Math.max(max, (Math.abs(num(entry, 'moved')) / dt) * 1000)
   }, 0)
-  // 落点只在「最后仍在跟随」时判：用户中途接管后，target 与 top 本来就差一截，
-  // 拿那一帧判落点会冤枉跟随器（实测过：滑行到最后 8px 时用户滚轮接管）。
+
+  // A3：落点只在「最后仍在跟随」时判；用户中途接管后 target 与 top 本来就差一截。
   const lastTick = ticks[ticks.length - 1]
   const lastIndex = lastTick === undefined ? -1 : entries.lastIndexOf(lastTick)
   const takenOver = lastTick !== undefined && (
-    Number(lastTick.stick ?? 1) === 0
+    num(lastTick, 'stick') === 0
     || entries.slice(lastIndex + 1).some(entry => entry.kind === 'unstick')
   )
   const gap = lastTick === undefined || takenOver
     ? null
-    : Math.abs(Number(lastTick.target ?? 0) - Number(lastTick.top ?? 0))
+    : Math.abs(num(lastTick, 'target') - num(lastTick, 'top'))
+  const settleMeasured = gap !== null
+  if (!settleMeasured) unverified.push('A3')
 
-  let violated = 0
-  let unsticks = 0
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index]
-    if (entry === undefined || entry.kind !== 'unstick') continue
-    unsticks += 1
-    const window = entries.slice(index + 1, index + 40)
-    const moved = window.some(next => next.kind === 'tick' && Math.abs(Number(next.moved ?? 0)) >= 1)
-    if (moved) violated += 1
+  // A4 / C2：跟随帧的最小余量。
+  const followed = ticks.filter(entry => num(entry, 'stick') === 1)
+  const minMargin = followed.length === 0
+    ? null
+    : followed.reduce((min, entry) => Math.min(min, num(entry, 'margin')), Number.POSITIVE_INFINITY)
+  const marginFloor = MOTION.scroll.minMargin * 0.6
+  if (minMargin === null) unverified.push('A4')
+
+  // B1：每次用户上滚之后 500ms 内的跟随器写入。
+  let quietViolations = 0
+  let driftMax = 0
+  for (const unstick of unsticks) {
+    const at = unstick.t
+    const quietTicks = within(entries, at, LIMITS.quietMs, 'tick')
+    if (quietTicks.some(entry => Math.abs(num(entry, 'moved')) >= 1)) quietViolations += 1
+    const driftTicks = within(entries, at, LIMITS.driftMs, 'tick')
+    const drift = driftTicks.reduce((sum, entry) => sum + Math.abs(num(entry, 'moved')), 0)
+    driftMax = Math.max(driftMax, drift)
   }
+  const quietMeasured = unsticks.length > 0
+  if (!quietMeasured) { unverified.push('B1'); unverified.push('B2') }
 
+  // B3：重新吸附只发生在用户自己往下滚过之后。
   let resticks = 0
   let suspicious = 0
   for (let index = 1; index < entries.length; index += 1) {
@@ -265,27 +356,56 @@ export function checkEntries (entries: ProbeEntry[]): {
     const previous = entries[index - 1]
     if (entry === undefined || previous === undefined) continue
     if (entry.kind !== 'scroll' || previous.kind !== 'scroll') continue
-    if (previous.stick === 0 && entry.stick === 1) {
+    if (Number(previous.stick) === 0 && Number(entry.stick) === 1) {
       resticks += 1
-      // 合规的重新吸附：发生在「用户滚到我们最后一次写入位置的下方」之后。
-      const written = Number(entry.w ?? entry.top ?? 0)
-      if (Number(entry.top ?? 0) <= written + 2) suspicious += 1
+      const written = num(entry, 'w')
+      if (num(entry, 'top') <= written + LIMITS.restick) suspicious += 1
     }
   }
 
-  // 证据不足不算通过：空日志 / 没几帧的日志给出 pass 是假绿。
-  const enough = ticks.length >= 10
-  // 被用户接管 = 这条判据不适用（不是通过，也不是失败），所以记 takenOver。
-  const settleOk = takenOver ? true : (gap === null ? false : gap <= 2)
-  const pass = enough && maxVelocity <= limit && settleOk && violated === 0 && suspicious === 0
+  // B4：会话切换标记之后，单次落位 + 随后 10 帧静止。
+  const marks = entries.filter(entry => entry.kind === 'session')
+  let landings = 0
+  let landingOk = true
+  let landingMeasured = marks.length > 0
+  for (const mark of marks) {
+    const after = entries.slice(entries.indexOf(mark) + 1)
+    const landingAt = after.findIndex(entry => entry.kind === 'scroll')
+    if (landingAt < 0) { landingMeasured = false; continue }
+    const frames = after.slice(landingAt).filter(entry => entry.kind === 'tick').slice(0, LIMITS.landingFrames)
+    if (frames.length < LIMITS.landingFrames) { landingMeasured = false; continue }
+    landings += 1
+    if (frames.some(entry => Math.abs(num(entry, 'moved')) > 1)) landingOk = false
+  }
+  if (!landingMeasured) unverified.push('B4')
+
+  // B5：错误必须有测量来源（install 时挂上的 error / unhandledrejection 监听）。
+  const errors = entries.filter(entry => entry.kind === 'error').length
+
+  const enough = ticks.length >= LIMITS.minTicks
+  const moveOk = maxVelocity <= limit
+  const settleOk = settleMeasured && (gap ?? Number.POSITIVE_INFINITY) <= LIMITS.settle
+  const marginOk = minMargin !== null && minMargin >= marginFloor && minMargin >= LIMITS.marginC2
+  const quietOk = quietViolations === 0
+  const driftOk = driftMax <= LIMITS.drift
+  const restickOk = suspicious === 0
+  const errorsOk = errors === 0
+  const complete = enough && unverified.length === 0
+  const pass = complete && moveOk && settleOk && marginOk && quietOk && driftOk && restickOk && landingOk && errorsOk
+
   return {
     pass,
+    complete,
+    unverified,
     evidence: { ticks: ticks.length, enough },
-    move: { maxVelocity: Math.round(maxVelocity), limit, ok: maxVelocity <= limit },
-    settle: { gap: gap === null ? null : Math.round(gap), ok: settleOk, takenOver },
-    quiet: { unstick: unsticks, violated, ok: violated === 0 },
-    restick: { resticks, suspicious, ok: suspicious === 0 },
-    errors: 0,
+    move: { maxVelocity: Math.round(maxVelocity), limit, ok: moveOk },
+    settle: { gap: gap === null ? null : Math.round(gap), limit: LIMITS.settle, ok: settleOk, measured: settleMeasured },
+    margin: { min: minMargin === null ? null : Math.round(minMargin), floor: Math.round(marginFloor), c2: LIMITS.marginC2, ok: marginOk, measured: minMargin !== null },
+    quiet: { unsticks: unsticks.length, violations: quietViolations, windowMs: LIMITS.quietMs, ok: quietOk, measured: quietMeasured },
+    drift: { max: Math.round(driftMax), limit: LIMITS.drift, ok: driftOk, measured: quietMeasured },
+    restick: { resticks, suspicious, threshold: LIMITS.restick, ok: restickOk, measured: resticks > 0 },
+    switchLanding: { landings, ok: landingMeasured ? landingOk : false, measured: landingMeasured },
+    errors: { count: errors, ok: errorsOk },
   }
 }
 
@@ -297,7 +417,7 @@ export function checkEntries (entries: ProbeEntry[]): {
  * 这种高度启发猜一次。
  * @returns 当前滚动体；没有挂载或没有 DOM 时为 null。
  */
-export function resolveScroller (): HTMLElement | null {
+export function findProbeViewport (): HTMLElement | null {
   if (typeof document === 'undefined') return null
   const container = document.querySelector('.' + cls.viewport)
   if (!(container instanceof HTMLElement)) return null

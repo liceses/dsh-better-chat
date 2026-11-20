@@ -70,16 +70,6 @@ function readSnapshot (sessions: SessionsApi): SessionListSnapshot | null {
   }
 }
 
-/** Read the list snapshot without letting a Host failure break mounting. */
-function readRows (sessions: SessionsApi): ReturnType<typeof listChatSessions> {
-  try {
-    return listChatSessions(sessions.list.getSnapshot())
-  } catch (error) {
-    console.warn('[chat-a2ui] 读取 Chat 会话列表失败：', error)
-    return []
-  }
-}
-
 /**
  * Small observable controller. React reads it through useSyncExternalStore;
  * every mutation replaces the state object so snapshots compare by identity.
@@ -189,6 +179,10 @@ export class ChatModeController {
 
     // 当前选中仍然成立就沿用它：宿主快照里还在，或者是我们自己刚建过的。
     // 空会话的 agentPreset 投影可能还没生成，不能因此把它当成「不存在」。
+    //
+    // 注意这里**故意**读未过滤的 snapshot.byId：listChatSessions 的 agentPreset 过滤
+    // 决定的是「侧栏展示哪些」，不是「这个 id 还存不存在」。把它用在存在性判断上，
+    // 就会在空会话上得出「不存在」，于是每次挂载都重建一个（本函数修的就是这个）。
     const currentId = this.state.activeSessionId
     const stillKnown = currentId !== null && (
       this.createdIds.has(currentId) || snapshot?.byId[currentId] !== undefined

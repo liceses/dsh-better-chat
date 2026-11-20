@@ -94,7 +94,8 @@ describe('motion.config.json 与加载器', () => {
       for (const entry of readdirSync(path, { withFileTypes: true })) {
         const full = join(path, entry.name)
         if (entry.isDirectory()) walk(full)
-        else if (/\.(ts|tsx)$/.test(entry.name) && !/motion(-[a-z]+)?\.ts$/.test(entry.name)) files.push(full)
+        // 只排除**定义**这份配置的 motion-config.ts；motion-hooks / motion-roles 等都是真实读取方。
+        else if (/\.(ts|tsx)$/.test(entry.name) && entry.name !== 'motion-config.ts') files.push(full)
       }
     }
     walk(dir)

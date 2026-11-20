@@ -9,7 +9,6 @@ import type { CSSProperties } from 'react'
 import { Marked, type RendererObject } from 'marked'
 import DOMPurify from 'dompurify'
 import { cls } from './classes'
-import { MOTION, clipSeconds } from './motion-config'
 import { useStream } from './motion-hooks'
 import { useMotionLevel } from './motion-preference'
 import { cx } from './util'
@@ -279,7 +278,7 @@ export const Markdown = memo(function Markdown ({ text, streaming = false, tail 
 
     const grown = grew ? total - previousTotal : total
     if (grown <= 0) return
-    animateStreamTail(host, Math.min(grown, MOTION.stream.maxChars), stream.stagger)
+    animateStreamTail(host, Math.min(grown, stream.maxChars), stream.stagger)
   }, [html, streaming, tail, text, stream.stagger, reduced])
 
   // 高度补间：宿主一次可能提交几百像素的正文（实测单批 +531px），直接铺开就是
@@ -301,7 +300,7 @@ export const Markdown = memo(function Markdown ({ text, streaming = false, tail 
     if (clip !== null && clip.height === next) return
     const previous = clip === null ? next : clip.height
     // 首次出现用最短时长：高度没变，不该凭空拖一拍。
-    const duration = clip === null ? MOTION.stream.clipMin : clipSeconds(next - previous)
+    const duration = clip === null ? stream.clipMin : stream.clipSeconds(next - previous)
     setClip({ height: next, duration })
   }, [html, clipActive, clip, reduced])
 

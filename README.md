@@ -118,7 +118,7 @@ P0.7 只动左栏几何与过程行样式，验收在 `chatweb` profile 的独�
 - 过程行：思考与工具调用宽度 62 / 173px（改前铺满 736px），相邻过程行 33–34px（改前 44–80px），无卡片底色与描边。
 - 流式：真实 web_search + web_fetch 跑完一轮，过程行从「运行中」到「已完成」；正文流式带行尾光标，不再出现长条卡片。
 - 暗色：`body[data-ds-dark-theme]` 下同一套旁注行无白底残留。
-- 守卫：`tests/smoke.test.ts` 锁住沟槽 margin、行宽一致、过程行规则，以及「不许再把全局 animation-duration 压成 1ms」。
+- 守卫：`tests/smoke.test.ts` 断言插件注册与面板/视图/header 入口；样式的守卫在 `tests/style-split.test.ts`——它拿 `tests/fixtures/style-before.txt`（拆分前的完整样式表）做**规则多重集**与**级联等价性**比对，任何一条声明被改动或丢失都会红。
 
 ## P0.6 验收
 
@@ -156,6 +156,7 @@ src/client/chat-mode/
   ChatSessionList.tsx            左栏 Chat 会话列表
   ChatPanelIcon.tsx              左栏面板图标
   select.ts                      按 agentPreset=chat 过滤与排序
+  host-affordance.ts             宿主「新建会话」入口的判据（含挂载自检）
   useChatMode.ts                 useSyncExternalStore 绑定
 src/client/chat-a2ui/
   ChatA2UIView.tsx               消息流容器、内滚动、空态
@@ -176,7 +177,15 @@ src/client/chat-a2ui/
   styles/lightbox.ts             灯箱（顶层选择器，不套 .caui-root）
   styles/misc.ts                 Chat 模式页面外壳、轨迹抽屉、状态页、页面级断点
   motion-config.ts               读 motion.config.json：类型 / 兜底 / 校验
-  motion.ts                      spring 与行入场退场（从配置派生）
+  motion-roles.ts                角色 → 展开（reduced 档把位移/缩放/模糊归零）
+  motion-hooks.ts                useRole / useEnter / useStream（跟随档位重渲染）
+  motion-scope.ts                useMotionAttribute：data-motion 的唯一出口
+  motion-preference.ts           档位状态（full / reduced）与切换
+  motion.ts                      存量兼容层：只剩 spring / layoutSpring / reducedMotion
+  scroll-follow.ts               跟随物理：位置独立、单帧位移 ≤ maxSpeed×dt
+  scroll-ownership.ts            谁是滚动体、这次位移是谁写的
+  scroll-frame.ts                每帧观测的形状（FollowFrame）
+  scroll-probe.ts                探针与 checkEntries（验收判据的唯一实现）
 src/client/session/
   actions.ts                     create / fork
   NewChatButton.tsx              原生 header 的新对话入口
@@ -184,7 +193,9 @@ src/client/session/
 
 ## 动效配置
 
-界面里所有动效数值都在仓库根的 **`motion.config.json`**，没有写死在组件里：
+界面里所有动效数值都在仓库根的 **`motion.config.json`**，没有写死在组件里。
+
+> 这个文件里还有 `scroll` 一节：它不是动效令牌，而是**滚动跟随的行为参数**（速度上限、余量、归属容差、三个时间窗）。放在同一份配置里是因为它们也要「改一个数，全仓生效」，但改它之前请先看下一节的验收标准。
 
 - `springs.*`：行入场 / 容器尺寸 / 折叠体的 spring（stiffness / damping / mass）。
 - `row.enter` / `row.exit`：行进场位移与透明度、退场时长与缓动。
@@ -197,7 +208,7 @@ src/client/session/
 
 ## 滚动探针（排查「莫名其妙跳一下」）
 
-滚动跟随的判定都在 `scroll-follow.ts` / `ScrollToBottom.tsx` 里，肉眼看不清，所以内置了一个探针：
+滚动跟随分三层：**跟多少**在 `scroll-follow.ts`（纯函数）、**谁在滚 / 这次位移是谁写的**在 `scroll-ownership.ts`、**怎么接 DOM 与 rAF** 在 `ScrollToBottom.tsx`。三层都不靠肉眼，所以内置了一个探针：
 
 **打开**（二选一）：
 
@@ -226,6 +237,8 @@ __cauiProbe.off()       // 停止记录
 | `external` | 每帧自查发现「位置被别人动过」：`top / delta`（相对基准）`/ stick`（不依赖 scroll 事件，事件被推迟时也能抓到） |
 | `mut` | 消息流 DOM 变更：`n / h / top / rows / lastH` |
 | `unstick` | 停止跟随的原因：`by: wheel｜touch｜scroll` |
+| `session` | 会话切换标记（`ChatWorkspace` 每次换会话自动打一条）；B4 只有打了标记才判 |
+| `error` | 运行期 JS 错误（`error` / `unhandledrejection`），B5 的测量来源 |
 
 **复现一次跳动的流程**：`__cauiProbe.clear()` → 正常用（滚轮、拖选、切会话）→ 跳动发生时立刻 `__cauiProbe.save()`，把 JSON 发我；或者直接贴 `__cauiProbe.tail(60)`。
 
@@ -269,7 +282,14 @@ CSS 侧同样走令牌：`styles/*.ts` 里的过渡时长与缓动全部是 `var
 
 ## 滚动跟随的验收标准
 
-改这个模块之前先确认「改完算不算好」。A 组自动守，B 组在浏览器里一行判定（`__cauiProbe.check()` 读同一份日志、按同一组阈值给结论）。
+改这个模块之前先确认「改完算不算好」。A 组自动守（`sim:scroll` + `npm test`），B 组在浏览器里一行判定：`__cauiProbe.check()` **只读同一份日志、只用一处阈值**（`scroll-probe.ts` 的 `LIMITS`）。
+
+`check()` 的返回里有两个布尔量，别只看 `pass`：
+
+- `complete`：九条判据**都测到了**。B1/B2 需要有用户上滚（滚轮/拖选都算），B4 需要有会话切换（切会话时自动打标记），A3 需要最后停在底部。
+- `unverified`：没测到的判据编号。**缺测量不等于通过**——`unverified` 非空时 `pass` 一定为 `false`，并会点名缺哪条。
+
+一次完整的验证：`__cauiProbe.clear()` → 发一条长回答，中途滚上去再滚回底部 → 切一次会话 → `__cauiProbe.check()`。
 
 ### A · 算法（离线，`npm run sim:scroll` + `npm test`）
 

@@ -7,7 +7,8 @@
  * 2. 本模块不依赖 React，读取全部按运行时形状兜底，任何垃圾输入都不抛错。
  * 3. 仍需旧渲染器的 kind 原样透传（legacy），DOM 与改造前完全一致。
  *
- * ChatRow.tsx 只消费这里的结果，那边不再有 `data as Xxx` 断言。
+ * ChatRow.tsx 只消费这里的结果，那边不再有 `data as Xxx` 断言；本模块只保留
+ * 一处有注释的类型断言（readToolRoot），因为它衔接的是宿主契约里的形状。
  */
 import type {
   AssistantBlock,
@@ -450,6 +451,17 @@ export function toolStatusOf (root: ToolCallData['root']): ToolStatus {
  * @param data - 宿主节点数据，运行时形状不可信。
  * @returns 与 kind 对应的行视图。
  */
+/** 名单窄化：`includes` 本身不会把 `string` 收成字面量联合，这个守卫负责那一步。 */
+function isOneOf<T extends string> (list: readonly T[], value: string): value is T {
+  return (list as readonly string[]).includes(value)
+}
+
+/**
+ * 把宿主节点解析成可渲染的行视图。
+ * @param kind - 宿主节点的 `kind`（分派唯一依据）。
+ * @param data - 宿主节点的 `data`；任何垃圾输入都不抛错。
+ * @returns 判别联合 `RowView`。
+ */
 export function parseRow (kind: string, data: unknown): RowView {
   // turn-trigger 是纯标记：只用于分组与运行分隔线，无论 payload 是什么都不渲染。
   if (kind === 'turn-trigger') return { type: 'hidden' }
@@ -488,16 +500,15 @@ export function parseRow (kind: string, data: unknown): RowView {
         branchable: rec['branchUnavailable'] !== true && seq !== undefined,
       }
     }
-    case 'turn-error':
-    case 'turn-max-tokens':
-    case 'model-retry':
-    case 'turn-process':
-      return { type: 'notice', kind, spec: noticeSpec(kind, data) }
-    case 'command':
-    case 'compaction':
-    case 'manual-compaction':
-      return { type: 'legacy', kind, data }
     default:
+      // 这两族不在这里逐个列 case：kind 名单只有 NOTICE_KINDS / LEGACY_KINDS 一份，
+      // 加一个新 kind 只需要改那个数组，不会出现「switch 改了、表没改」的两张表。
+      if (isOneOf(NOTICE_KINDS, kind)) {
+        return { type: 'notice', kind, spec: noticeSpec(kind, data) }
+      }
+      if (isOneOf(LEGACY_KINDS, kind)) {
+        return { type: 'legacy', kind, data }
+      }
       return { type: 'unknown', kind, data }
   }
 }
