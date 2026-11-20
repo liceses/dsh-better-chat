@@ -10,7 +10,7 @@
 
 import type { ComponentType } from 'react'
 import { CHAT_PANEL_ID } from '../constants'
-import type { SessionsApi, UseSessions, WorkspacesApi } from '../chat-a2ui/types'
+import type { SessionListSnapshot, SessionsApi, UseSessions, WorkspacesApi } from '../chat-a2ui/types'
 import { createChatSession, forkChatAt } from '../session/actions'
 import { listChatSessions, pickChatSession } from './select'
 
@@ -60,6 +60,16 @@ const INITIAL_STATE: ChatModeState = {
   pendingNew: false,
 }
 
+/** 读宿主会话快照；失败时返回 null（不阻断挂载）。 */
+function readSnapshot (sessions: SessionsApi): SessionListSnapshot | null {
+  try {
+    return sessions.list.getSnapshot()
+  } catch (error) {
+    console.warn('[chat-a2ui] 读取会话快照失败：', error)
+    return null
+  }
+}
+
 /** Read the list snapshot without letting a Host failure break mounting. */
 function readRows (sessions: SessionsApi): ReturnType<typeof listChatSessions> {
   try {
@@ -84,6 +94,15 @@ export class ChatModeController {
   private disposeSidebar: (() => void) | null = null
   private pendingNewPromise: Promise<string | undefined> | null = null
   private resolvePendingNew: ((value: string | undefined) => void) | null = null
+  /**
+   * 本控制器自己创建过的会话 id（有上限）。
+   *
+   * 空会话在宿主里可能**还没有** agentPreset 投影，于是 listChatSessions 过滤后看不到它。
+   * 如果 ensureActive 只认过滤后的列表，那么每次切回 Chat 面板都会以为「一个都没有」
+   * 而再建一个空会话——这就是「反复自动创建空对话」。所以自动路径必须同时认
+   * 「宿主快照里还在」和「我们自己刚建过」这两种事实。
+   */
+  private readonly createdIds = new Set<string>()
 
   constructor (deps: ChatModeDeps) {
     this.deps = deps
@@ -160,13 +179,26 @@ export class ChatModeController {
 
   /** Pick the stored active Session, the newest Chat Session, or create one. */
   private async ensureActive (generation: number): Promise<void> {
-    const rows = readRows(this.deps.sessions)
+    const snapshot = readSnapshot(this.deps.sessions)
+    const rows = snapshot === null ? [] : listChatSessions(snapshot)
     if (!this.mounted || generation !== this.generation) return
     if (this.state.pendingNew) {
       await this.createNew(undefined, generation)
       return
     }
-    const target = pickChatSession(rows, this.state.activeSessionId)
+
+    // 当前选中仍然成立就沿用它：宿主快照里还在，或者是我们自己刚建过的。
+    // 空会话的 agentPreset 投影可能还没生成，不能因此把它当成「不存在」。
+    const currentId = this.state.activeSessionId
+    const stillKnown = currentId !== null && (
+      this.createdIds.has(currentId) || snapshot?.byId[currentId] !== undefined
+    )
+    if (stillKnown) {
+      this.setState({ activeSessionId: currentId, phase: 'ready', error: null })
+      return
+    }
+
+    const target = pickChatSession(rows, currentId)
     if (target !== undefined) {
       this.setState({ activeSessionId: target, phase: 'ready', error: null })
       return
@@ -193,6 +225,15 @@ export class ChatModeController {
     }
   }
 
+  /** 记一个自己建过的会话：自动路径靠它避免重复创建（只留最近 50 个）。 */
+  private rememberCreated (sessionId: string): void {
+    this.createdIds.add(sessionId)
+    if (this.createdIds.size > 50) {
+      const oldest = this.createdIds.values().next().value
+      if (oldest !== undefined) this.createdIds.delete(oldest)
+    }
+  }
+
   /** Actual creation body, split out so createNew can own the in-flight promise. */
   private async createNewRun (
     parentSessionId: string | undefined,
@@ -205,6 +246,7 @@ export class ChatModeController {
     }, parentSessionId)
     const current = this.mounted && generation === this.generation
     if (created !== undefined) {
+      this.rememberCreated(created)
       this.setState({
         activeSessionId: created,
         phase: current ? 'ready' : 'idle',

@@ -184,3 +184,43 @@ describe('ChatModeController.branch and openSession', () => {
     expect(harness.selectPanel).toHaveBeenCalledWith(null)
   })
 })
+describe('ChatModeController.mount 的幂等性（切回 Chat 面板不能反复建空会话）', () => {
+  it('重新挂载时，不会因为新建会话还没进 Chat 列表而再建一个', async () => {
+    const harness = makeHarness({ create: async () => 'new-1' })
+    harness.controller.mount()
+    await settled(harness.controller)
+    expect(harness.create).toHaveBeenCalledTimes(1)
+
+    // 宿主列表里暂时还没有这个空会话（projection 未生成），切走再切回来
+    harness.controller.unmount()
+    harness.controller.mount()
+    await settled(harness.controller)
+
+    expect(harness.create).toHaveBeenCalledTimes(1)
+    expect(harness.controller.getSnapshot().activeSessionId).toBe('new-1')
+  })
+
+  it('宿主快照里认得它、但还没有 chat 投影时也不重建', async () => {
+    const rows: Array<[string, SessionSummaryLike | undefined]> = []
+    const harness = makeHarness({ rows, create: async () => 'new-1' })
+    harness.controller.mount()
+    await settled(harness.controller)
+
+    rows.push(['new-1', { id: 'new-1' }])
+    harness.controller.unmount()
+    harness.controller.mount()
+    await settled(harness.controller)
+
+    expect(harness.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('显式新建仍然可以连续创建（幂等只约束自动路径）', async () => {
+    let n = 0
+    const harness = makeHarness({ create: async () => 'new-' + String(++n) })
+    harness.controller.mount()
+    await settled(harness.controller)
+    await harness.controller.enterNew()
+    await harness.controller.enterNew()
+    expect(harness.create).toHaveBeenCalledTimes(3)
+  })
+})
