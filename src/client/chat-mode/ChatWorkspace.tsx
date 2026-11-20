@@ -26,6 +26,12 @@ import type {
 import { cx } from '../chat-a2ui/util'
 import { CHAT_PANEL_ID, CHAT_VIEW_ID } from '../constants'
 import type { ChatModeController } from './controller'
+import {
+  describeAffordances,
+  findNewSessionControls,
+  isNewSessionControl,
+  isNewSessionShortcut,
+} from './host-affordance'
 
 /** Props injected into the session-scoped Chat body. */
 export interface ChatWorkspaceProps {
@@ -74,6 +80,28 @@ function BackGlyph (): ReactElement {
   )
 }
 
+/** 自检延迟：等侧栏与窗口标题栏把首屏渲染完再看，避免把「还没渲染」误判成「已经改版」。 */
+const AFFORDANCE_PROBE_MS = 800
+
+/** 自检只告警一次（模块级，跨挂载保持），免得面板反复开关刷屏。 */
+let affordanceWarned = false
+
+/**
+ * 在页面里找宿主认得出的新建会话控件；一个都找不到就告警一次。
+ * 只读 DOM，不抛错、不影响渲染。
+ */
+function checkNewSessionAffordances (): void {
+  if (affordanceWarned) return
+  if (findNewSessionControls(document).length > 0) return
+  affordanceWarned = true
+  console.warn(
+    '[chat-a2ui] 页面上找不到宿主的新建会话控件，捕获阶段的拦截可能已失效。当前判据：'
+    + describeAffordances()
+    + '。宿主 UI 可能已改，请更新 src/client/chat-mode/host-affordance.ts。'
+    + '（侧栏被收起，或当前访问快照不含 session/create 时，这条告警属正常。）',
+  )
+}
+
 /**
  * Render the Chat header, Conversation content, and trajectory dock.
  * @param props - Session hooks, the factory renderer, and the Chat controller.
@@ -100,14 +128,15 @@ export function ChatWorkspace ({
 
   // While Chat is the active panel, the shell's own New Session affordances
   // must create a Chat conversation instead of a native Session (which would
-  // switch the main column away). The sidebar renders that row outside the
-  // pluggable action slot in this host build, so capture the click and the
-  // global shortcut before React or the shortcut service reaches them.
+  // switch the main column away). This host build offers no action slot for
+  // that entry: the sidebar row is rendered by the shell itself (its only hole,
+  // `sidebar.session.action`, is an HOC that decorates the shell's own button
+  // content and leaves the create action with the shell), the window-chrome
+  // control belongs to `shell.leading`, and the `session.new` command belongs
+  // to ui-workspace. So capture the click and the global shortcut before React
+  // or the shortcut service reaches them. The criteria themselves live in
+  // host-affordance.ts so the self-check below can share them.
   useEffect(() => {
-    const isNewSessionControl = (target: EventTarget | null): boolean => {
-      if (!(target instanceof Element)) return false
-      return target.closest('button[aria-keyshortcuts*="Alt+N"], button[aria-label="新建会话"], button[aria-label="New session"]') !== null
-    }
     const onClick = (event: MouseEvent): void => {
       if (!isNewSessionControl(event.target)) return
       event.preventDefault()
@@ -115,8 +144,7 @@ export function ChatWorkspace ({
       void controller.enterNew()
     }
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (!(event.metaKey || event.ctrlKey) || event.shiftKey) return
-      if (event.key.toLowerCase() !== 'n') return
+      if (!isNewSessionShortcut(event)) return
       event.preventDefault()
       event.stopPropagation()
       void controller.enterNew()
@@ -128,6 +156,14 @@ export function ChatWorkspace ({
       window.removeEventListener('keydown', onKeyDown, true)
     }
   }, [controller])
+
+  // 自检：上面那套判据认的是宿主的 aria 约定，宿主改版会让拦截**静默**失效
+  // （点击不再被接管，页面却不会报错）。挂载后检查一次页面里是否还存在被认出的
+  // 新建会话控件，没有就告警一次——告警是这套捕获方案的可观测性兜底，不是装饰。
+  useEffect(() => {
+    const timer = window.setTimeout(checkNewSessionAffordances, AFFORDANCE_PROBE_MS)
+    return () => { window.clearTimeout(timer) }
+  }, [])
 
   const shownTitle = typeof title === 'string' && title.trim().length > 0 ? title.trim() : '新对话'
   const running = session.running === true
