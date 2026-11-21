@@ -5,6 +5,11 @@ import type { SessionSummaryLike, SessionsApi } from '../src/client/chat-a2ui/ty
 import { CHAT_PANEL_ID } from '../src/client/constants'
 import { ChatModeController } from '../src/client/chat-mode/controller'
 
+interface Registered {
+  options: Record<string, unknown>
+  component: unknown
+}
+
 /** Build a controller plus observable fakes. */
 function makeHarness (config: {
   rows?: Array<[string, SessionSummaryLike | undefined]>
@@ -17,6 +22,8 @@ function makeHarness (config: {
   create: ReturnType<typeof vi.fn>
   fork: ReturnType<typeof vi.fn>
   selectPanel: ReturnType<typeof vi.fn>
+  registered: Registered[]
+  dispose: ReturnType<typeof vi.fn>
 } {
   const rows = config.rows ?? []
   const create = vi.fn(config.create ?? (async () => 'new-1'))
@@ -29,14 +36,24 @@ function makeHarness (config: {
       subscribe: () => () => {},
     },
   }
+  const registered: Registered[] = []
+  const dispose = vi.fn()
+  const slots = {
+    register: (options: Record<string, unknown>, component: unknown) => {
+      registered.push({ options, component })
+      return dispose
+    },
+  }
   const selectPanel = vi.fn()
   const controller = new ChatModeController({
     sessions,
+    slots,
     layout: { selectPanel },
+    sidebarComponent: () => null,
     ensureChatWorkspace: config.ensureChatWorkspace,
     chatWorkspaceId: config.chatWorkspaceId,
   })
-  return { controller, create, fork, selectPanel }
+  return { controller, create, fork, selectPanel, registered, dispose }
 }
 
 /** Wait until the controller leaves the opening phase. */
@@ -47,10 +64,13 @@ async function settled (controller: ChatModeController): Promise<void> {
 }
 
 describe('ChatModeController.mount', () => {
-  it('挂载后创建 Session（不再占用宿主左栏：ADR 0003）', async () => {
+  it('installs the Chat sidebar and creates a Session when none exists', async () => {
     const harness = makeHarness()
     harness.controller.mount()
     expect(harness.controller.getSnapshot().mounted).toBe(true)
+    expect(harness.registered).toHaveLength(1)
+    expect(harness.registered[0]?.options.name).toBe('sidebar.workspaces')
+    expect(harness.registered[0]?.options.priority).toBe(-10)
 
     await settled(harness.controller)
     expect(harness.create).toHaveBeenCalledTimes(1)
@@ -104,7 +124,7 @@ describe('ChatModeController.mount', () => {
     expect(harness.controller.getSnapshot().activeSessionId).toBe('new')
   })
 
-  it('卸载后保留选中，且不动宿主的任何座位', async () => {
+  it('removes the occupant and keeps the selection on unmount', async () => {
     const harness = makeHarness({
       rows: [['a', { id: 'a', projectionValues: { agentPreset: 'chat' } }]],
     })
@@ -112,6 +132,7 @@ describe('ChatModeController.mount', () => {
     await settled(harness.controller)
     harness.controller.unmount()
 
+    expect(harness.dispose).toHaveBeenCalledTimes(1)
     expect(harness.controller.getSnapshot()).toMatchObject({
       mounted: false,
       activeSessionId: 'a',

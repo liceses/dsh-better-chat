@@ -17,6 +17,7 @@ import { ChatA2UIView } from './chat-a2ui/ChatA2UIView'
 import type { ImageAttachmentRef, SessionsApi, WorkspacesApi } from './chat-a2ui/types'
 import { ChatPage } from './chat-mode/ChatPage'
 import { ChatPanelIcon } from './chat-mode/ChatPanelIcon'
+import { ChatSessionList } from './chat-mode/ChatSessionList'
 import { ChatWorkspace } from './chat-mode/ChatWorkspace'
 import { ChatModeController } from './chat-mode/controller'
 import { ensureChatWorkspace, readInjectedChatPaths } from './chat-mode/chat-workspace'
@@ -85,11 +86,12 @@ export function apply (ctx: ClientContext): void {
   const controller = new ChatModeController({
     sessions: ctx.sessions,
     workspaces: ctx.workspaces,
+    slots: ctx.slots,
     layout: ctx.layout,
+    sidebarComponent: ChatSessionList,
     ensureChatWorkspace: ensure,
     chatWorkspaceId: () => chatWorkspaceId,
   })
-
 
   /**
    * Branch from a rendered message. Inside the mounted Chat panel the child
