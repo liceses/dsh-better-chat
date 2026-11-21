@@ -40,6 +40,13 @@ export interface ChatModeDeps {
   slots: ChatModeSlots
   layout: ChatModeLayout
   sidebarComponent: ChatSidebarComponent
+  /**
+   * 确保 Chat 工作区存在（首次创建会话前 await 一次）。
+   * 失败不阻断创建：会话退回宿主默认目录，只是归属退化。
+   */
+  ensureChatWorkspace?: () => Promise<void>
+  /** 当前 Chat 工作区 id；没准备好时返回 undefined。 */
+  chatWorkspaceId?: () => string | undefined
 }
 
 /** Coarse state exposed to the page, header, and sidebar list. */
@@ -234,9 +241,17 @@ export class ChatModeController {
     generation: number,
   ): Promise<string | undefined> {
     this.setState({ phase: 'opening', error: null })
+    // 归属先于创建：Chat 工作区没准备好就不带 workspaceId（落到默认目录），
+    // 而不是先建一个无主会话再想办法搬。
+    try {
+      await this.deps.ensureChatWorkspace?.()
+    } catch (error) {
+      console.warn('[chat-a2ui] 准备 Chat 工作区失败：', error)
+    }
     const created = await createChatSession({
       sessions: this.deps.sessions,
       workspaces: this.deps.workspaces,
+      chatWorkspaceId: this.deps.chatWorkspaceId,
     }, parentSessionId)
     const current = this.mounted && generation === this.generation
     if (created !== undefined) {

@@ -42,6 +42,40 @@ Formatting:
 
 This preset is chat-only by design. When the interface supports A2UI surfaces, the chat surface may render structured blocks; until then, plain Markdown is the complete answer format.`
 
+import { mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+/** 页面全局名：客户端半从这里读 Chat 工作区的绝对路径（webserver/index-inject 推入）。 */
+export const CHAT_PATHS_GLOBAL = '__DSH_CHAT_A2UI_PATHS__'
+
+/**
+ * 解析 DSH 家目录的绝对路径。
+ *
+ * 优先用宿主提供的 `dshHomePath` 服务（它已经按 `$DSH_HOME` 解析过），
+ * 退回到环境变量与 `~/.dsh`。只在宿主运行时（Node）执行。
+ * @param ctx - 宿主上下文；可能没有 dshHomePath（旧版宿主或测试替身）。
+ * @returns 绝对路径。
+ */
+export function resolveDshHome (ctx: { dshHomePath?: () => string }): string {
+  try {
+    if (typeof ctx.dshHomePath === 'function') {
+      const value = ctx.dshHomePath()
+      if (typeof value === 'string' && value.length > 0) return value
+    }
+  } catch {
+    // 服务缺失或抛错都退回环境变量，不阻断插件加载。
+  }
+  const fromEnv = typeof process === 'undefined' ? undefined : process.env.DSH_HOME
+  if (typeof fromEnv === 'string' && fromEnv.trim().length > 0) return fromEnv.trim()
+  return join(homedir(), '.dsh')
+}
+
+/** Chat 工作区的绝对路径：家目录下的 `chat`。 */
+export function chatWorkspacePath (ctx: { dshHomePath?: () => string }): string {
+  return join(resolveDshHome(ctx), 'chat')
+}
+
 /**
  * Register the chat preset. A duplicate id is logged rather than allowed to
  * tear down the whole profile: another package may already provide a preset
@@ -51,8 +85,22 @@ This preset is chat-only by design. When the interface supports A2UI surfaces, t
  */
 export function apply(ctx: {
   agentPresets: { register: (definition: unknown) => Promise<() => Promise<void>> }
+  dshHomePath?: () => string
+  on?: (event: string, listener: (table: unknown[]) => void) => void
   logger?: { warn: (message: string) => void }
 }, config: ChatPluginConfig = {}): () => void {
+  // Chat 工作区的目录由宿主半创建（只有宿主半有 fs 权限），路径再推给客户端半。
+  // 客户端侧的 workspaces.create 只接受**已存在**的目录，所以顺序不能反。
+  const workspacePath = chatWorkspacePath(ctx)
+  try {
+    mkdirSync(workspacePath, { recursive: true })
+  } catch (error) {
+    ctx.logger?.warn(`chat-a2ui: could not create the chat workspace directory (${workspacePath}): ${error instanceof Error ? error.message : String(error)}`)
+  }
+  ctx.on?.('webserver/index-inject', (table: unknown[]) => {
+    table.push({ kind: 'global', name: CHAT_PATHS_GLOBAL, value: { chatWorkspace: workspacePath } })
+  })
+
   const prompt = config.systemPrompt?.trim() ? config.systemPrompt : CHAT_SYSTEM_PROMPT
   const ready = ctx.agentPresets.register({
     id: 'chat',

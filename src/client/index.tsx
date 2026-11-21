@@ -20,6 +20,7 @@ import { ChatPanelIcon } from './chat-mode/ChatPanelIcon'
 import { ChatSessionList } from './chat-mode/ChatSessionList'
 import { ChatWorkspace } from './chat-mode/ChatWorkspace'
 import { ChatModeController } from './chat-mode/controller'
+import { ensureChatWorkspace, readInjectedChatPaths } from './chat-mode/chat-workspace'
 import {
   CHAT_PANEL_ID,
   CHAT_PANEL_LABEL,
@@ -69,12 +70,27 @@ function imageUrl (ctx: ClientContext, sessionId: string, attachment: ImageAttac
  * @param ctx - client root context.
  */
 export function apply (ctx: ClientContext): void {
+  // Chat 工作区：路径来自宿主半（`webserver/index-inject` 推的页面全局），
+  // 注册由这里完成。第一次建会话前 await 一次，拿到 id 之后一直复用。
+  const injected = readInjectedChatPaths()
+  let chatWorkspaceId: string | undefined
+  let ensuring: Promise<string | undefined> | null = null
+  const ensure = async (): Promise<void> => {
+    if (chatWorkspaceId !== undefined) return
+    if (ensuring === null) ensuring = ensureChatWorkspace(ctx.workspaces, injected.chatWorkspace)
+    const id = await ensuring
+    ensuring = null
+    if (id !== undefined) chatWorkspaceId = id
+  }
+
   const controller = new ChatModeController({
     sessions: ctx.sessions,
     workspaces: ctx.workspaces,
     slots: ctx.slots,
     layout: ctx.layout,
     sidebarComponent: ChatSessionList,
+    ensureChatWorkspace: ensure,
+    chatWorkspaceId: () => chatWorkspaceId,
   })
 
   /**

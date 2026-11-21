@@ -193,6 +193,11 @@ export interface WorkspacesApi {
   list: {
     getSnapshot: () => { items: readonly WorkspaceSummaryLike[] }
   }
+  /**
+   * 注册一个**已存在**的目录为 workspace（宿主契约：路径必须存在且是全限定路径）。
+   * 测试替身可以省略；省略时 Chat 工作区拿不到 id，会话退回宿主默认目录。
+   */
+  create?: (input: { path: string }) => Promise<{ workspaceId: string }>
 }
 
 export interface SessionsApi {

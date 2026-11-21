@@ -15,6 +15,8 @@ function makeHarness (config: {
   rows?: Array<[string, SessionSummaryLike | undefined]>
   create?: () => Promise<string>
   fork?: () => Promise<string>
+  ensureChatWorkspace?: () => Promise<void>
+  chatWorkspaceId?: () => string | undefined
 } = {}): {
   controller: ChatModeController
   create: ReturnType<typeof vi.fn>
@@ -48,6 +50,8 @@ function makeHarness (config: {
     slots,
     layout: { selectPanel },
     sidebarComponent: () => null,
+    ensureChatWorkspace: config.ensureChatWorkspace,
+    chatWorkspaceId: config.chatWorkspaceId,
   })
   return { controller, create, fork, selectPanel, registered, dispose }
 }
@@ -76,6 +80,34 @@ describe('ChatModeController.mount', () => {
       phase: 'ready',
       error: null,
     })
+  })
+
+  it('建会话前先确保 Chat 工作区，并把 id 传给 create（ADR 0003 的归属）', async () => {
+    const order: string[] = []
+    const harness = makeHarness({
+      create: async () => { order.push('create'); return 'new-1' },
+      ensureChatWorkspace: async () => { order.push('ensure') },
+      chatWorkspaceId: () => 'ws-chat',
+    })
+    harness.controller.mount()
+    await settled(harness.controller)
+
+    expect(order).toEqual(['ensure', 'create'])
+    expect(harness.create.mock.calls[0]?.[0]).toMatchObject({ agentPreset: 'chat', workspaceId: 'ws-chat' })
+  })
+
+  it('Chat 工作区准备失败时不阻断建会话（只退回归属）', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const harness = makeHarness({
+      ensureChatWorkspace: async () => { throw new Error('mkdir failed') },
+      chatWorkspaceId: () => undefined,
+    })
+    harness.controller.mount()
+    await settled(harness.controller)
+    expect(harness.create).toHaveBeenCalledTimes(1)
+    expect(harness.create.mock.calls[0]?.[0]).toStrictEqual({ agentPreset: 'chat' })
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('selects the newest existing Chat Session without creating one', async () => {
