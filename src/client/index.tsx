@@ -22,6 +22,7 @@ import { ChatWorkspace } from './chat-mode/ChatWorkspace'
 import { ChatModeController } from './chat-mode/controller'
 import { ensureChatWorkspace, readInjectedChatPaths } from './chat-mode/chat-workspace'
 import { archiveChatSession } from './chat-mode/archive-session'
+import { renameChatSession } from './chat-mode/rename-session'
 import {
   CHAT_PANEL_ID,
   CHAT_PANEL_LABEL,
@@ -96,6 +97,7 @@ export function apply (ctx: ClientContext): void {
     ensureChatWorkspace: ensure,
     chatWorkspaceId: () => chatWorkspaceId,
     archiveSession: (sessionId: string) => archiveChatSession(ctx.uiWorkspace, sessionId),
+    renameSession: (sessionId: string, title: string) => renameChatSession(ctx.sessions, sessionId, title),
     unarchiveSession: async (sessionId: string) => {
       const restore = ctx.uiWorkspace.unarchiveSession
       if (typeof restore !== 'function') return

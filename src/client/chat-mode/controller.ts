@@ -51,6 +51,8 @@ export interface ChatModeDeps {
   archiveSession?: (sessionId: string) => Promise<{ ok: boolean; reason?: string }>
   /** 撤销归档；宿主没有给插件用的 toast，撤销入口由列表自己画。 */
   unarchiveSession?: (sessionId: string) => Promise<void>
+  /** 重命名；没有时行上不出现重命名入口。 */
+  renameSession?: (sessionId: string, title: string) => Promise<{ ok: boolean; reason?: string }>
 }
 
 /** Coarse state exposed to the page, header, and sidebar list. */
@@ -135,6 +137,7 @@ export class ChatModeController {
           controller: this,
           archive: this.deps.archiveSession,
           unarchive: this.deps.unarchiveSession,
+          rename: this.deps.renameSession,
         }),
       }, this.deps.sidebarComponent)
     } catch (error) {

@@ -391,6 +391,15 @@ export const LIST_CSS = `
   opacity: 1;
 }
 
+/* 两个动作并排：重命名在左、归档在右，互不遮挡。 */
+.caui-chat-row-action[data-action="rename"] {
+  right: 32px;
+}
+
+.caui-chat-row-action svg {
+  pointer-events: none;
+}
+
 .caui-chat-row-action:hover,
 .caui-chat-row-action:focus-visible {
   background: var(--caui-glass-bg);

@@ -25,6 +25,8 @@ export interface ChatSessionListProps {
   archive?: (sessionId: string) => Promise<{ ok: boolean; reason?: string }>
   /** 撤销归档（宿主没有给插件用的 toast，所以撤销入口由我们自己画）。 */
   unarchive?: (sessionId: string) => void | Promise<void>
+  /** 重命名；没有时行上不出现重命名入口。 */
+  rename?: (sessionId: string, title: string) => Promise<{ ok: boolean; reason?: string }>
   /**
    * 宿主的 Workspace 快照选择器（宿主会随座位注入）。我们只读 `archivedSessionIds`；
    * 缺省时退化成只看本地隐藏（旧宿主 / 测试替身）。
@@ -52,7 +54,7 @@ function formatWhen (updatedAt: number): string {
  * The occupant is installed by the controller only while the Chat panel is
  * mounted, so leaving Chat restores the native workspace list.
  */
-export function ChatSessionList ({ controller, useSessions, archive, unarchive, useWorkspaces, wide = true }: ChatSessionListProps): ReactElement {
+export function ChatSessionList ({ controller, useSessions, archive, unarchive, rename, useWorkspaces, wide = true }: ChatSessionListProps): ReactElement {
   useChatStyles()
   const snapshot = useSessions(state => state)
   const mode = useChatMode(controller)
@@ -74,6 +76,19 @@ export function ChatSessionList ({ controller, useSessions, archive, unarchive, 
     return set
   }, [archivedLocal, hostArchived])
   const rows = useMemo(() => allRows.filter(row => !hidden.has(row.id)), [allRows, hidden])
+  // 行内重命名：不弹原生 prompt（某些宿主里会被拦），直接把标题换成 input。
+  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null)
+  const commitRename = useCallback(() => {
+    if (editing === null || rename === undefined) { setEditing(null); return }
+    const target = editing
+    setEditing(null)
+    void rename(target.id, target.value).then((result) => {
+      setNotice(result.ok
+        ? { kind: 'ok', text: '已重命名为「' + target.value.trim() + '」', sessionId: target.id }
+        : { kind: 'error', text: result.reason ?? '重命名失败', sessionId: target.id })
+    })
+  }, [editing, rename])
+
   const handleArchive = useCallback((sessionId: string, title: string) => {
     if (archive === undefined) return
     void archive(sessionId).then((result) => {
@@ -161,11 +176,52 @@ export function ChatSessionList ({ controller, useSessions, archive, unarchive, 
                     </AnimatePresence>
                     <span className={cls.chatModeRowTop}>
                       {row.running && <span className={cls.liveDot} aria-label="正在生成" />}
-                      <span className={cls.chatModeRowTitle}>{chatRowTitle(row)}</span>
+                      {editing !== null && editing.id === row.id
+                        ? (
+                          <input
+                            className={cls.chatModeRowTitle}
+                            aria-label="重命名对话"
+                            autoFocus
+                            value={editing.value}
+                            onClick={(event) => { event.stopPropagation() }}
+                            onChange={(event) => { setEditing({ id: row.id, value: event.target.value }) }}
+                            onKeyDown={(event) => {
+                              event.stopPropagation()
+                              if (event.key === 'Enter') { event.preventDefault(); commitRename() }
+                              if (event.key === 'Escape') { event.preventDefault(); setEditing(null) }
+                            }}
+                            onBlur={commitRename}
+                          />
+                          )
+                        : <span className={cls.chatModeRowTitle}>{chatRowTitle(row)}</span>}
                     </span>
                     <span className={cls.chatModeRowMeta}>
                       <span>{formatWhen(row.updatedAt)}</span>
                     </span>
+                    {rename === undefined ? null : (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className={cls.chatModeRowAction}
+                        data-action="rename"
+                        aria-label={'重命名对话：' + chatRowTitle(row)}
+                        title="重命名"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setEditing({ id: row.id, value: chatRowTitle(row) })
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return
+                          event.preventDefault()
+                          event.stopPropagation()
+                          setEditing({ id: row.id, value: chatRowTitle(row) })
+                        }}
+                      >
+                        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M10.5 2.5l3 3M3 13l1-3.5 7-7 2.5 2.5-7 7L3 13z" />
+                        </svg>
+                      </span>
+                    )}
                     {archive === undefined ? null : (
                       <span
                         role="button"
