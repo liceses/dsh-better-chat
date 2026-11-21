@@ -181,6 +181,11 @@ export interface SessionSummaryLike {
 export interface SessionListSnapshot {
   ids: readonly string[]
   byId: Record<string, SessionSummaryLike | undefined>
+  /**
+   * 列表是否已拉到：`pending` 表示「还没到」，`ready` 才表示「确实这么多」。
+   * 旧宿主/测试替身可能没有这个字段——缺省按 ready 处理（见 controller 的就绪门）。
+   */
+  phase?: 'pending' | 'ready'
 }
 
 export interface WorkspaceSummaryLike {

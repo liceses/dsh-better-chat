@@ -106,6 +106,14 @@ export class ChatModeController {
    * 「宿主快照里还在」和「我们自己刚建过」这两种事实。
    */
   private readonly createdIds = new Set<string>()
+  /**
+   * 等待会话列表就绪时挂的订阅（null 表示没在等）。
+   *
+   * 刷新后 `session/list` 是异步拉取的，宿主快照的 `phase` 先是 `pending`、
+   * 里面的 `ids` 是空数组。把「还没拉到」当成「一个都没有」就会每次刷新都新建
+   * 一个空会话——这正是「刷新进入 Chat 反复创建会话」的根因。
+   */
+  private waitReady: (() => void) | null = null
 
   constructor (deps: ChatModeDeps) {
     this.deps = deps
@@ -175,11 +183,33 @@ export class ChatModeController {
     void this.ensureActive(generation)
   }
 
+  /** 等到列表就绪后再跑一次 ensureActive（只挂一次订阅）。 */
+  private deferUntilReady (generation: number): void {
+    if (this.waitReady !== null) return
+    const unsubscribe = this.deps.sessions.list.subscribe(() => {
+      const snapshot = readSnapshot(this.deps.sessions)
+      if (snapshot === null) return
+      if (snapshot.phase !== undefined && snapshot.phase !== 'ready') return
+      this.stopWaiting()
+      if (!this.mounted || generation !== this.generation) return
+      void this.ensureActive(generation)
+    })
+    this.waitReady = unsubscribe
+  }
+
+  /** 撤掉等待订阅（幂等）。 */
+  private stopWaiting (): void {
+    const unsubscribe = this.waitReady
+    this.waitReady = null
+    if (unsubscribe !== null) unsubscribe()
+  }
+
   /** Withdraw the page-owned sidebar occupant but keep the last selection. */
   unmount (): void {
     if (!this.mounted) return
     this.mounted = false
     this.generation += 1
+    this.stopWaiting()
     this.releaseSidebar()
     this.finishPending(undefined)
     this.setState({ mounted: false, phase: 'idle', error: null, pendingNew: false })
@@ -188,7 +218,14 @@ export class ChatModeController {
   /** Pick the stored active Session, the newest Chat Session, or create one. */
   private async ensureActive (generation: number): Promise<void> {
     const snapshot = readSnapshot(this.deps.sessions)
-    const rows = snapshot === null ? [] : listChatSessions(snapshot)
+    // 就绪门：列表还没拉到（pending）时什么都不做，等它 ready 再来。
+    // 旧宿主没有 phase 字段，按 ready 处理，行为与以前一致。
+    if (snapshot === null || (snapshot.phase !== undefined && snapshot.phase !== 'ready')) {
+      this.deferUntilReady(generation)
+      return
+    }
+    this.stopWaiting()
+    const rows = listChatSessions(snapshot)
     if (!this.mounted || generation !== this.generation) return
     if (this.state.pendingNew) {
       await this.createNew(undefined, generation)

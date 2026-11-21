@@ -13,6 +13,7 @@ interface Registered {
 /** Build a controller plus observable fakes. */
 function makeHarness (config: {
   rows?: Array<[string, SessionSummaryLike | undefined]>
+  phase?: 'pending' | 'ready'
   create?: () => Promise<string>
   fork?: () => Promise<string>
   ensureChatWorkspace?: () => Promise<void>
@@ -24,16 +25,25 @@ function makeHarness (config: {
   selectPanel: ReturnType<typeof vi.fn>
   registered: Registered[]
   dispose: ReturnType<typeof vi.fn>
+  /** 往列表里加一行（不发通知，配合 setPhase 一起用）。 */
+  pushRow: (id: string, row: SessionSummaryLike) => void
+  /** 把列表切到某个阶段并通知订阅者（模拟宿主拉到数据）。 */
+  setPhase: (next: 'pending' | 'ready') => void
 } {
   const rows = config.rows ?? []
+  let phase: 'pending' | 'ready' = config.phase ?? 'ready'
+  const listeners = new Set<() => void>()
   const create = vi.fn(config.create ?? (async () => 'new-1'))
   const fork = vi.fn(config.fork ?? (async () => 'child-1'))
   const sessions: SessionsApi = {
     create,
     fork,
     list: {
-      getSnapshot: () => ({ ids: rows.map(([id]) => id), byId: Object.fromEntries(rows) }),
-      subscribe: () => () => {},
+      getSnapshot: () => ({ ids: rows.map(([id]) => id), byId: Object.fromEntries(rows), phase }),
+      subscribe: (listener: () => void) => {
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
     },
   }
   const registered: Registered[] = []
@@ -53,7 +63,19 @@ function makeHarness (config: {
     ensureChatWorkspace: config.ensureChatWorkspace,
     chatWorkspaceId: config.chatWorkspaceId,
   })
-  return { controller, create, fork, selectPanel, registered, dispose }
+  return {
+    controller,
+    create,
+    fork,
+    selectPanel,
+    registered,
+    dispose,
+    pushRow: (id, row) => { rows.push([id, row]) },
+    setPhase: (next) => {
+      phase = next
+      for (const listener of listeners) listener()
+    },
+  }
 }
 
 /** Wait until the controller leaves the opening phase. */
@@ -216,6 +238,46 @@ describe('ChatModeController.branch and openSession', () => {
     expect(harness.selectPanel).toHaveBeenCalledWith(null)
   })
 })
+describe('ChatModeController 的就绪门（刷新后不能反复建空会话）', () => {
+  it('列表还在 pending 时不建会话，等 ready 后选中已有的那条', async () => {
+    const harness = makeHarness({ phase: 'pending' })
+    harness.controller.mount()
+
+    // 刷新后的头几百毫秒：列表还没到，此时绝不能建会话。
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(harness.create).not.toHaveBeenCalled()
+    expect(harness.controller.getSnapshot().phase).toBe('opening')
+
+    // 宿主把列表拉回来了：先有行、再切 ready（顺序与真实推送一致）。
+    harness.pushRow('existing', { id: 'existing', projectionValues: { agentPreset: 'chat' } })
+    harness.setPhase('ready')
+    await settled(harness.controller)
+
+    expect(harness.create).not.toHaveBeenCalled()
+    expect(harness.controller.getSnapshot()).toMatchObject({
+      activeSessionId: 'existing',
+      phase: 'ready',
+    })
+  })
+
+  it('列表 ready 且确实为空时才建（旧宿主没有 phase 字段，按 ready 处理）', async () => {
+    const harness = makeHarness({ phase: 'ready' })
+    harness.controller.mount()
+    await settled(harness.controller)
+    expect(harness.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('等不到就绪时卸载，不会在建完会话后才发现挂错了', async () => {
+    const harness = makeHarness({ phase: 'pending' })
+    harness.controller.mount()
+    harness.controller.unmount()
+    harness.pushRow('late', { id: 'late', projectionValues: { agentPreset: 'chat' } })
+    harness.setPhase('ready')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(harness.create).not.toHaveBeenCalled()
+  })
+})
+
 describe('ChatModeController.mount 的幂等性（切回 Chat 面板不能反复建空会话）', () => {
   it('重新挂载时，不会因为新建会话还没进 Chat 列表而再建一个', async () => {
     const harness = makeHarness({ create: async () => 'new-1' })
