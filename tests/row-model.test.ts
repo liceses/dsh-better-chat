@@ -331,4 +331,37 @@ describe('健壮性与依赖边界', () => {
     const source = readFileSync(join(import.meta.dirname, '..', 'src', 'client', 'chat-a2ui', 'row-model.ts'), 'utf8')
     expect(source).not.toMatch(/from\s+'react/)
   })
+
+  it('legacy 的三种 kind 在行模型里读完，组件不再碰宿主形状', () => {
+    const command = parseRow('command', { kind: 'command', name: 'clear', args: '--all', outcome: { kind: 'error', text: '失败：权限不足' } })
+    expect(command.type).toBe('legacy')
+    if (command.type !== 'legacy') throw new Error('unreachable')
+    expect(command.command).toEqual({ name: 'clear', args: '--all', outcome: { kind: 'error', text: '失败：权限不足' } })
+
+    const compaction = parseRow('compaction', { summary: '折叠了早期对话', shadowedItemCount: 12, shadowedTokenCount: 3400 })
+    if (compaction.type !== 'legacy') throw new Error('unreachable')
+    expect(compaction.compaction).toEqual({ summary: '折叠了早期对话', itemCount: 12, tokenCount: 3400 })
+
+    const manual = parseRow('manual-compaction', {
+      command: { name: 'compact' },
+      compaction: { summary: '手动压缩', shadowedItemCount: 3 },
+    })
+    if (manual.type !== 'legacy') throw new Error('unreachable')
+    expect(manual.command?.name).toBe('compact')
+    expect(manual.compaction?.summary).toBe('手动压缩')
+    expect(manual.compaction?.itemCount).toBe(3)
+  })
+
+  it('legacy 的字段缺失时给 undefined，不抛错', () => {
+    const broken = parseRow('command', { kind: 'command' })
+    if (broken.type !== 'legacy') throw new Error('unreachable')
+    expect(broken.command).toEqual({ name: undefined, args: undefined, outcome: undefined })
+
+    // data 不是对象时整行退化成 unknown（既有行为），空对象才走 legacy。
+    expect(parseRow('manual-compaction', null).type).toBe('unknown')
+    const manual = parseRow('manual-compaction', {})
+    if (manual.type !== 'legacy') throw new Error('unreachable')
+    expect(manual.command?.name).toBeUndefined()
+    expect(manual.compaction?.summary).toBeUndefined()
+  })
 })

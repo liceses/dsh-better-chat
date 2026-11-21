@@ -350,13 +350,60 @@ export interface NoticeView {
   spec: NoticeSpec
 }
 
-/** 仍需旧组件渲染的 kind：data 原样透传。 */
+/** 命令行的可读字段（/命令、参数、结果）。 */
+export interface LegacyCommand {
+  /** 命令名（不含斜杠）。 */
+  name?: string
+  /** 原始参数文本。 */
+  args?: string
+  /** 结果：kind 与一句话文案。 */
+  outcome?: { kind?: string; text?: string }
+}
+
+/** 压缩行的可读字段（摘要 + 折叠量）。 */
+export interface LegacyCompaction {
+  /** 摘要正文。 */
+  summary?: string
+  /** 折叠了多少条消息。 */
+  itemCount?: number
+  /** 折叠了多少 token。 */
+  tokenCount?: number
+}
+
+/** 仍需旧组件渲染的 kind：数据读完再交给渲染器，组件里不再读宿主形状。 */
 export interface LegacyView {
   type: 'legacy'
   /** command / compaction / manual-compaction。 */
   kind: LegacyKind
-  /** 原始节点数据，由旧渲染器自己按形状读取。 */
+  /** 原始节点数据（保留给需要整包排查的场景）。 */
   data: unknown
+  /** command 与 manual-compaction 才有。 */
+  command?: LegacyCommand
+  /** compaction 与 manual-compaction 才有。 */
+  compaction?: LegacyCompaction
+}
+
+/** 读一条命令行。 */
+function readLegacyCommand (value: unknown): LegacyCommand {
+  const rec = asRecord(value)
+  const outcome = asRecord(rec?.['outcome'])
+  return {
+    name: readString(rec, 'name'),
+    args: readString(rec, 'args'),
+    outcome: outcome === undefined
+      ? undefined
+      : { kind: readString(outcome, 'kind'), text: readString(outcome, 'text') },
+  }
+}
+
+/** 读一条压缩行。 */
+function readLegacyCompaction (value: unknown): LegacyCompaction {
+  const rec = asRecord(value)
+  return {
+    summary: readString(rec, 'summary'),
+    itemCount: readNumber(rec, 'shadowedItemCount'),
+    tokenCount: readNumber(rec, 'shadowedTokenCount'),
+  }
 }
 
 /** 纯标记节点（turn-trigger）：不渲染任何内容。 */
@@ -507,7 +554,16 @@ export function parseRow (kind: string, data: unknown): RowView {
         return { type: 'notice', kind, spec: noticeSpec(kind, data) }
       }
       if (isOneOf(LEGACY_KINDS, kind)) {
-        return { type: 'legacy', kind, data }
+        if (kind === 'command') return { type: 'legacy', kind, data, command: readLegacyCommand(data) }
+        if (kind === 'compaction') return { type: 'legacy', kind, data, compaction: readLegacyCompaction(data) }
+        // manual-compaction：两种形状各读一份。
+        return {
+          type: 'legacy',
+          kind,
+          data,
+          command: readLegacyCommand(rec['command']),
+          compaction: readLegacyCompaction(rec['compaction']),
+        }
       }
       return { type: 'unknown', kind, data }
   }

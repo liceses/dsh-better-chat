@@ -84,20 +84,31 @@ function BackGlyph (): ReactElement {
 /** 自检延迟：等侧栏与窗口标题栏把首屏渲染完再看，避免把「还没渲染」误判成「已经改版」。 */
 const AFFORDANCE_PROBE_MS = 800
 
-/** 自检只告警一次（模块级，跨挂载保持），免得面板反复开关刷屏。 */
-let affordanceWarned = false
+/**
+ * 上一次告警用的判据文本。
+ *
+ * 以前用一个布尔量「只告警一次」：误报一次（侧栏收起、首屏没渲染完）之后就
+ * 永久静默，等于把自己关掉了。改成按**判据文本**去重——同一条判据只响一次，
+ * 判据换了（宿主改版后我们更新了判据）会再响，恢复后再次失效也会再响。
+ */
+let lastAffordanceWarn = ''
 
 /**
- * 在页面里找宿主认得出的新建会话控件；一个都找不到就告警一次。
+ * 在页面里找宿主认得出的新建会话控件；找不到就告警（同一判据只响一次）。
  * 只读 DOM，不抛错、不影响渲染。
  */
 function checkNewSessionAffordances (): void {
-  if (affordanceWarned) return
-  if (findNewSessionControls(document).length > 0) return
-  affordanceWarned = true
+  if (findNewSessionControls(document).length > 0) {
+    // 恢复了：下次再失效要重新告警。
+    lastAffordanceWarn = ''
+    return
+  }
+  const signature = describeAffordances()
+  if (lastAffordanceWarn === signature) return
+  lastAffordanceWarn = signature
   console.warn(
     '[chat-a2ui] 页面上找不到宿主的新建会话控件，捕获阶段的拦截可能已失效。当前判据：'
-    + describeAffordances()
+    + signature
     + '。宿主 UI 可能已改，请更新 src/client/chat-mode/host-affordance.ts。'
     + '（侧栏被收起，或当前访问快照不含 session/create 时，这条告警属正常。）',
   )

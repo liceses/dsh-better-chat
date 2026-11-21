@@ -5,14 +5,17 @@
  * 1. ChatRow 自己按 nodeKey 订阅 chat store，流式 token 只会重渲染当前这一行；
  *    父组件只负责顺序、动画和空态。
  * 2. 分派只有一张表：RowView 的 type → 渲染函数（见 RENDERERS）。
- * 3. 宿主数据的收窄全部在 row-model.ts；这里只消费 RowView。唯一的断言是把
- *    判别联合的成员查表收敛成一次调用（RENDERERS[view.type]），它不含字段读取。
+ * 3. 宿主数据的收窄全部在 row-model.ts（含 legacy 三族），这里只消费 RowView。
+ *    唯一的读取是未知行的兜底卡片（它正是因为「形状未知」才存在），唯一的断言
+ *    是把判别联合的成员查表收敛成一次调用（RENDERERS[view.type]）。
  */
 import { memo, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import type { UseChat } from './types'
 import type {
   AssistantView,
   ContextView,
+  LegacyCommand,
+  LegacyCompaction,
   LegacyKind,
   LegacyView,
   NoticeView,
@@ -22,7 +25,7 @@ import type {
   UnknownView,
   UserView,
 } from './row-model'
-import { asRecord, formatCount, parseRow, readNumber, readString } from './row-model'
+import { asRecord, formatCount, parseRow, readString } from './row-model'
 import { AssistantBlocks, type LoadImage } from './AssistantBlocks'
 import { BranchButton } from './BranchButton'
 import { ChatImage } from './ChatImage'
@@ -262,72 +265,61 @@ function TurnTailRow ({ view, running, forkAt }: {
 // command / compaction / manual-compaction：仍由旧组件渲染，DOM 保持不变。
 // ---------------------------------------------------------------------------
 
-function CommandBody ({ data }: { data: unknown }): ReactElement {
-  const rec = asRecord(data)
-  const name = readString(rec, 'name')
-  const args = readString(rec, 'args')
-  const outcome = asRecord(rec?.['outcome'])
-  const outcomeKind = readString(outcome, 'kind')
-  const outcomeText = readString(outcome, 'text')
+function CommandBody ({ view }: { view: LegacyCommand }): ReactElement {
   return (
     <div className={cls.command}>
-      <span className={cls.commandName}>{name === undefined ? '命令' : '/' + name}</span>
-      {args === undefined ? null : <span className={cls.commandArgs}>{args}</span>}
-      {outcome === undefined ? null : (
-        <span className={cx(cls.commandOutcome, outcomeKind === 'error' && cls.toolError)}>
-          {outcomeText ?? (outcomeKind === 'error' ? '失败' : '完成')}
+      <span className={cls.commandName}>{view.name === undefined ? '命令' : '/' + view.name}</span>
+      {view.args === undefined ? null : <span className={cls.commandArgs}>{view.args}</span>}
+      {view.outcome === undefined ? null : (
+        <span className={cx(cls.commandOutcome, view.outcome.kind === 'error' && cls.toolError)}>
+          {view.outcome.text ?? (view.outcome.kind === 'error' ? '失败' : '完成')}
         </span>
       )}
     </div>
   )
 }
 
-function CompactionBody ({ data }: { data: unknown }): ReactElement {
-  const rec = asRecord(data)
-  const summary = readString(rec, 'summary')
-  const items = readNumber(rec, 'shadowedItemCount')
-  const tokens = readNumber(rec, 'shadowedTokenCount')
+function CompactionBody ({ view }: { view: LegacyCompaction }): ReactElement {
   const bits: string[] = []
-  if (items !== undefined) bits.push('折叠 ' + formatCount(items) + ' 条消息')
-  if (tokens !== undefined) bits.push('约 ' + formatCount(tokens) + ' tokens')
+  if (view.itemCount !== undefined) bits.push('折叠 ' + formatCount(view.itemCount) + ' 条消息')
+  if (view.tokenCount !== undefined) bits.push('约 ' + formatCount(view.tokenCount) + ' tokens')
   return (
     <div className={cls.compaction}>
-      <div className={cls.compactionSummary}>{summary === undefined ? '上下文已压缩' : truncate(summary, 480)}</div>
+      <div className={cls.compactionSummary}>
+        {view.summary === undefined ? '上下文已压缩' : truncate(view.summary, 480)}
+      </div>
       {bits.length === 0 ? null : <div className={cls.time}>{bits.join(' · ')}</div>}
     </div>
   )
 }
 
-function ManualCompactionBody ({ data }: { data: unknown }): ReactElement {
-  const rec = asRecord(data)
-  const command = asRecord(rec?.['command'])
-  const compaction = asRecord(rec?.['compaction'])
+function ManualCompactionBody ({ view }: { view: LegacyView }): ReactElement {
   return (
     <RowFrame kind="manual-compaction" variant={cls.rowNotice}>
-      {command === undefined ? null : <CommandBody data={rec?.['command']} />}
-      {compaction === undefined ? null : <CompactionBody data={rec?.['compaction']} />}
+      {view.command === undefined ? null : <CommandBody view={view.command} />}
+      {view.compaction === undefined ? null : <CompactionBody view={view.compaction} />}
     </RowFrame>
   )
 }
 
 /** legacy 行按 kind 查的第二张表；每个 kind 对应一个旧组件，顺序无关。 */
-const LEGACY_RENDERERS: Record<LegacyKind, (data: unknown) => ReactElement> = {
-  command: data => (
+const LEGACY_RENDERERS: Record<LegacyKind, (view: LegacyView) => ReactElement> = {
+  command: view => (
     <RowFrame kind="command" variant={cls.rowNotice}>
-      <CommandBody data={data} />
+      <CommandBody view={view.command ?? {}} />
     </RowFrame>
   ),
-  compaction: data => (
+  compaction: view => (
     <RowFrame kind="compaction" variant={cls.rowNotice}>
-      <CompactionBody data={data} />
+      <CompactionBody view={view.compaction ?? {}} />
     </RowFrame>
   ),
-  'manual-compaction': data => <ManualCompactionBody data={data} />,
+  'manual-compaction': view => <ManualCompactionBody view={view} />,
 }
 
-/** legacy 行的唯一入口：kind 与 data 都已由行模型给好。 */
+/** legacy 行的唯一入口：kind 与已解析的字段都由行模型给好。 */
 function LegacyRow ({ view }: { view: LegacyView }): ReactElement {
-  return LEGACY_RENDERERS[view.kind](view.data)
+  return LEGACY_RENDERERS[view.kind](view)
 }
 
 // ---------------------------------------------------------------------------
