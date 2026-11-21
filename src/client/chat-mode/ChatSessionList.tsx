@@ -1,6 +1,6 @@
 /** Chat-only Session list shown in the left Sidebar while Chat mode is open. */
 
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { cls } from '../chat-a2ui/classes'
@@ -18,6 +18,11 @@ import { useChatMode } from './useChatMode'
 export interface ChatSessionListProps {
   controller: ChatModeController
   useSessions: UseSessions
+  /**
+   * 归档一个会话（宿主全局归档集，可撤销）。
+   * 没有这个能力时按钮不渲染：宁可不给入口，也不要给一个点了没反应的按钮。
+   */
+  archive?: (sessionId: string) => void | Promise<void>
   wide?: boolean
 }
 
@@ -40,7 +45,7 @@ function formatWhen (updatedAt: number): string {
  * The occupant is installed by the controller only while the Chat panel is
  * mounted, so leaving Chat restores the native workspace list.
  */
-export function ChatSessionList ({ controller, useSessions, wide = true }: ChatSessionListProps): ReactElement {
+export function ChatSessionList ({ controller, useSessions, archive, wide = true }: ChatSessionListProps): ReactElement {
   useChatStyles()
   const snapshot = useSessions(state => state)
   const mode = useChatMode(controller)
@@ -48,7 +53,19 @@ export function ChatSessionList ({ controller, useSessions, wide = true }: ChatS
   const animated = level === 'full'
   // 档位属性统一由 useMotionAttribute 给出：CSS 选择器挂在根元素自身。
   const motionAttrs = useMotionAttribute()
-  const rows = useMemo(() => listChatSessionsSafe(snapshot), [snapshot])
+  // 归档后先在本列表里隐藏这一行：宿主归档集还没接进来（见 ADR 0003 待办），
+  // 但「点了归档、行还在」是明确的坏体验。撤销要刷新才回来。
+  const [archivedLocal, setArchivedLocal] = useState<ReadonlySet<string>>(() => new Set())
+  const allRows = useMemo(() => listChatSessionsSafe(snapshot), [snapshot])
+  const rows = useMemo(() => allRows.filter(row => !archivedLocal.has(row.id)), [allRows, archivedLocal])
+  const handleArchive = useCallback((sessionId: string) => {
+    setArchivedLocal(current => {
+      const next = new Set(current)
+      next.add(sessionId)
+      return next
+    })
+    if (archive !== undefined) void archive(sessionId)
+  }, [archive])
   const rowTransition = animated ? spring : { duration: 0 }
 
   return (
@@ -130,6 +147,30 @@ export function ChatSessionList ({ controller, useSessions, wide = true }: ChatS
                     <span className={cls.chatModeRowMeta}>
                       <span>{formatWhen(row.updatedAt)}</span>
                     </span>
+                    {archive === undefined ? null : (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className={cls.chatModeRowAction}
+                        aria-label={'归档对话：' + chatRowTitle(row)}
+                        title="归档（可在通知里撤销）"
+                        onClick={(event) => {
+                          // 行本身就是按钮：别让点击冒泡过去把会话打开。
+                          event.stopPropagation()
+                          handleArchive(row.id)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return
+                          event.preventDefault()
+                          event.stopPropagation()
+                          handleArchive(row.id)
+                        }}
+                      >
+                        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M2 5.5h12M5.5 5.5V3.5h5v2M3.5 5.5V13h9V5.5M6.5 8.5v2M9.5 8.5v2" />
+                        </svg>
+                      </span>
+                    )}
                   </motion.button>
                 )
               })}

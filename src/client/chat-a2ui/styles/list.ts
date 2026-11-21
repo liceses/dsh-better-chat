@@ -347,6 +347,41 @@ export const LIST_CSS = `
   transition: background var(--caui-dur-sm) var(--caui-ease-out), border-color var(--caui-dur-sm) var(--caui-ease-out);
 }
 
+/* 行尾的归档按钮：只在 hover / 键盘聚焦时出现，别让列表常态显得嘈杂。
+   行本身是 button，所以这里用 span[role=button]，点击要 stopPropagation。 */
+.caui-chat-row-action {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: -11px;
+  border-radius: 6px;
+  color: var(--caui-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--caui-dur-sm) var(--caui-ease-out), background var(--caui-dur-sm) var(--caui-ease-out);
+}
+
+.caui-chat-row:hover .caui-chat-row-action,
+.caui-chat-row:focus-within .caui-chat-row-action {
+  opacity: 1;
+}
+
+.caui-chat-row-action:hover,
+.caui-chat-row-action:focus-visible {
+  background: var(--caui-glass-bg);
+  color: var(--caui-fg);
+}
+
+/* 有归档按钮时右侧留出位置，标题不会顶到按钮下面。 */
+.caui-chat-row:has(.caui-chat-row-action) .caui-chat-row-title {
+  padding-right: 24px;
+}
+
 .caui-chat-row:hover:not(.caui-chat-row-active) {
   border-color: var(--caui-glass-border);
   background: var(--caui-glass-bg);

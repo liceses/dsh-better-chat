@@ -21,6 +21,7 @@ import { ChatSessionList } from './chat-mode/ChatSessionList'
 import { ChatWorkspace } from './chat-mode/ChatWorkspace'
 import { ChatModeController } from './chat-mode/controller'
 import { ensureChatWorkspace, readInjectedChatPaths } from './chat-mode/chat-workspace'
+import { archiveChatSession } from './chat-mode/archive-session'
 import {
   CHAT_PANEL_ID,
   CHAT_PANEL_LABEL,
@@ -56,6 +57,9 @@ interface ClientContext {
   }
   uiWorkspace: {
     openSession: (sessionId: string) => void
+    /** 归档（宿主的全局归档集，从所有分组视图隐藏，可撤销）。 */
+    archiveSession?: (sessionId: string, options?: { stopActivity?: boolean }) => Promise<void>
+    unarchiveSession?: (sessionId: string) => Promise<void>
   }
 }
 
@@ -91,6 +95,9 @@ export function apply (ctx: ClientContext): void {
     sidebarComponent: ChatSessionList,
     ensureChatWorkspace: ensure,
     chatWorkspaceId: () => chatWorkspaceId,
+    archiveSession: async (sessionId: string) => {
+      await archiveChatSession(ctx.uiWorkspace, sessionId)
+    },
   })
 
   /**

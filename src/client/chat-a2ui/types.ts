@@ -189,6 +189,14 @@ export interface WorkspaceSummaryLike {
   sessionIds?: readonly string[]
 }
 
+/** 宿主 uiWorkspace 服务里我们用到的那一小块。 */
+export interface UiWorkspaceApi {
+  /** 归档一个会话（宿主的全局归档集：从所有分组视图隐藏，可撤销）。 */
+  archiveSession?: (sessionId: string, options?: { stopActivity?: boolean }) => Promise<void>
+  /** 取消归档。 */
+  unarchiveSession?: (sessionId: string) => Promise<void>
+}
+
 export interface WorkspacesApi {
   list: {
     getSnapshot: () => { items: readonly WorkspaceSummaryLike[] }

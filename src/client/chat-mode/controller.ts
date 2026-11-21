@@ -47,6 +47,8 @@ export interface ChatModeDeps {
   ensureChatWorkspace?: () => Promise<void>
   /** 当前 Chat 工作区 id；没准备好时返回 undefined。 */
   chatWorkspaceId?: () => string | undefined
+  /** 归档一个会话（宿主全局归档集，可撤销）；没有时列表不渲染归档按钮。 */
+  archiveSession?: (sessionId: string) => Promise<void>
 }
 
 /** Coarse state exposed to the page, header, and sidebar list. */
@@ -127,7 +129,7 @@ export class ChatModeController {
       this.disposeSidebar = this.deps.slots.register({
         name: 'sidebar.workspaces',
         priority: -10,
-        inject: () => ({ controller: this }),
+        inject: () => ({ controller: this, archive: this.deps.archiveSession }),
       }, this.deps.sidebarComponent)
     } catch (error) {
       console.warn('[chat-a2ui] 安装 Chat 会话列表失败：', error)
