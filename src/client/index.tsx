@@ -12,7 +12,7 @@
  * @module dsh-chat-a2ui/client
  */
 
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactElement } from 'react'
 import { ChatA2UIView } from './chat-a2ui/ChatA2UIView'
 import type { ImageAttachmentRef, SessionsApi, WorkspacesApi } from './chat-a2ui/types'
 import { ChatPage } from './chat-mode/ChatPage'
@@ -23,6 +23,7 @@ import { ChatModeController } from './chat-mode/controller'
 import { ensureChatWorkspace, readInjectedChatPaths } from './chat-mode/chat-workspace'
 import { archiveChatSession } from './chat-mode/archive-session'
 import { renameChatSession } from './chat-mode/rename-session'
+import { RIGHTBAR_CHAT_ID, registerRightbarChat } from './chat-mode/rightbar'
 import {
   CHAT_PANEL_ID,
   CHAT_PANEL_LABEL,
@@ -40,6 +41,8 @@ export const inject = [
   'layout',
   'uiConversation',
   'uiWorkspace',
+  'sidebarRightTabs',
+  'sidebarRight',
 ]
 
 /** Minimal structural face of the Cordis client root context. */
@@ -56,6 +59,10 @@ interface ClientContext {
   uiConversation: {
     imageUrl: (sessionId: string, attachment: ImageAttachmentRef) => string | Promise<string>
   }
+  /** 右栏 tab 的注册表（宿主 sidebar-right 提供）。 */
+  sidebarRightTabs?: { register: (definition: Record<string, unknown>) => () => void }
+  /** 打开右栏 tab（宿主 sidebar-right 提供）。 */
+  sidebarRight?: { openTab: (kind: string, options?: Record<string, unknown>) => void }
   uiWorkspace: {
     openSession: (sessionId: string) => void
     /** 归档（宿主的全局归档集，从所有分组视图隐藏，可撤销）。 */
@@ -172,6 +179,35 @@ export function apply (ctx: ClientContext): void {
   // Header action reused by both headers. In the native header it enters the
   // Chat panel and asks the controller to create the first conversation; in
   // the Chat header it creates a sibling conversation in place.
+  // ── 右栏 Chat tab ────────────────────────────────────────────────────────
+  // 类型 + 正文（guide 卡片是发现入口）；没有 sidebarRight* 服务时静默跳过。
+  if (ctx.sidebarRightTabs !== undefined) {
+    registerRightbarChat(ctx.slots, ctx.sidebarRightTabs)
+  }
+
+  /** 会话头部按钮：开/关右栏的 Chat tab（没有右栏服务时整个按钮不渲染）。 */
+  function RightbarChatButton (): ReactElement | null {
+    const open = ctx.sidebarRight
+    if (open === undefined) return null
+    return (
+      <button
+        type="button"
+        className="caui-header-action"
+        aria-label="在右栏打开 Chat"
+        title="在右栏打开 Chat"
+        onClick={() => { open.openTab(RIGHTBAR_CHAT_ID) }}
+      >
+        ▤
+      </button>
+    )
+  }
+
+  ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
+    name: 'conversation.session.header.utilities',
+    id: 'chat-a2ui.rightbar',
+    order: -7,
+  }, RightbarChatButton))
+
   ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
     name: 'conversation.session.header.actions',
     id: 'chat-a2ui-new',

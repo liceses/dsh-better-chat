@@ -59,6 +59,9 @@ assert.deepEqual(exports.inject, [
   'layout',
   'uiConversation',
   'uiWorkspace',
+  // 右栏 Chat tab：类型注册表 + 打开入口（宿主 sidebar-right 提供）。
+  'sidebarRightTabs',
+  'sidebarRight',
 ])
 
 const registrations = []
