@@ -67,50 +67,34 @@ describe('createChatSession', () => {
     expect(fake.forkCalls).toHaveLength(0)
   })
 
-  it('inherits the parent cwd', async () => {
+  it('不再继承父会话的 cwd：对话不是工程', async () => {
     const fake = makeSessions({
       byId: { parent: { id: 'parent', cwd: 'D:\\work\\demo' } },
     })
     await createChatSession({ sessions: fake.sessions }, 'parent')
-    expect(fake.createCalls[0]).toStrictEqual({ agentPreset: 'chat', cwd: 'D:\\work\\demo' })
+    expect(fake.createCalls[0]).toStrictEqual({ agentPreset: 'chat' })
   })
 
-  it('omits blank or unknown parent cwd', async () => {
-    const fake = makeSessions({
-      byId: { blank: { id: 'blank', cwd: '' } },
-    })
-    await createChatSession({ sessions: fake.sessions }, 'blank')
-    await createChatSession({ sessions: fake.sessions }, 'missing')
-    for (const options of fake.createCalls) {
-      expect(Object.prototype.hasOwnProperty.call(options, 'cwd')).toBe(false)
-    }
-  })
-
-  it('inherits the workspace that owns the parent Session', async () => {
+  it('不再继承父会话所在的工作区（否则会落回项目工作区）', async () => {
     const fake = makeSessions({
       byId: { parent: { id: 'parent', cwd: 'D:\\work\\demo' } },
     })
     const workspaces = makeWorkspaces([
-      { workspaceId: 'other', path: 'D:\\elsewhere' },
       { workspaceId: 'ws-one', path: 'D:\\work', sessionIds: ['parent'] },
     ])
     await createChatSession({ sessions: fake.sessions, workspaces }, 'parent')
-    expect(fake.createCalls[0]).toStrictEqual({
-      agentPreset: 'chat',
-      cwd: 'D:\\work\\demo',
-      workspaceId: 'ws-one',
-    })
+    expect(fake.createCalls[0]).toStrictEqual({ agentPreset: 'chat' })
   })
 
-  it('falls back to a path match when no workspace lists the parent', async () => {
+  it('有 Chat 工作区时投进它，而不是父会话的工作区', async () => {
     const fake = makeSessions({
       byId: { parent: { id: 'parent', cwd: 'D:\\work\\demo' } },
     })
     const workspaces = makeWorkspaces([
-      { workspaceId: 'ws-two', path: 'D:\\work\\demo', sessionIds: [] },
+      { workspaceId: 'ws-one', path: 'D:\\work', sessionIds: ['parent'] },
     ])
-    await createChatSession({ sessions: fake.sessions, workspaces }, 'parent')
-    expect(fake.createCalls[0]?.workspaceId).toBe('ws-two')
+    await createChatSession({ sessions: fake.sessions, workspaces, chatWorkspaceId: () => 'ws-chat' }, 'parent')
+    expect(fake.createCalls[0]).toStrictEqual({ agentPreset: 'chat', workspaceId: 'ws-chat' })
   })
 
   it('honours a custom preset id', async () => {
@@ -137,15 +121,12 @@ describe('createChatSession', () => {
     warn.mockRestore()
   })
 
-  it('continues without cwd when the Session snapshot throws', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('完全不读会话快照：不再有「读父会话」这一步', async () => {
     const fake = makeSessions({
-      snapshot: () => { throw new Error('snapshot failed') },
+      snapshot: () => { throw new Error('snapshot should not be read') },
     })
     await expect(createChatSession({ sessions: fake.sessions }, 'parent')).resolves.toBe('created-session')
     expect(fake.createCalls[0]).toStrictEqual({ agentPreset: 'chat' })
-    expect(warn).toHaveBeenCalled()
-    warn.mockRestore()
   })
 })
 

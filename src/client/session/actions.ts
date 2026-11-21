@@ -14,8 +14,10 @@ import type { SessionsApi, WorkspacesApi } from '../chat-a2ui/types'
 export interface ChatSessionDeps {
   /** Host Session service. */
   sessions: SessionsApi
-  /** Host workspace service, used only to keep a new Session in its parent's workspace. */
+  /** Host workspace service：Chat 会话要投进 Chat 工作区，而不是父会话的工作区。 */
   workspaces?: WorkspacesApi
+  /** 返回 Chat 工作区的 id；拿不到时省略，会话会落到宿主的默认目录。 */
+  chatWorkspaceId?: () => string | undefined
   /** Agent preset id, default {@link CHAT_PRESET_ID}. */
   presetId?: string
 }
@@ -38,64 +40,23 @@ function isSessionId (value: unknown): value is string {
 }
 
 /**
- * Read the parent Session's working directory. Missing rows and Host errors
- * degrade to "let the Host decide" rather than failing the whole action.
- */
-function readParentCwd (sessions: SessionsApi, parentSessionId: string | undefined): string | undefined {
-  if (parentSessionId === undefined || parentSessionId.length === 0) return undefined
-  try {
-    const row = sessions.list.getSnapshot().byId[parentSessionId]
-    return typeof row?.cwd === 'string' && row.cwd.length > 0 ? row.cwd : undefined
-  } catch (error) {
-    console.warn('[chat-a2ui] 读取父会话工作目录失败：', error)
-    return undefined
-  }
-}
-
-/**
- * Find the parent Session's workspace. The Session itself does not expose a
- * workspace id, so reverse-map through the workspace list, then fall back to
- * a path match. A missing workspace is not an error: create still runs.
- */
-function readParentWorkspaceId (
-  sessions: SessionsApi,
-  workspaces: WorkspacesApi | undefined,
-  parentSessionId: string | undefined,
-  cwd: string | undefined,
-): string | undefined {
-  if (workspaces === undefined) return undefined
-  let items: ReturnType<WorkspacesApi['list']['getSnapshot']>['items']
-  try {
-    items = workspaces.list.getSnapshot().items
-  } catch (error) {
-    console.warn('[chat-a2ui] 读取工作区列表失败：', error)
-    return undefined
-  }
-  if (parentSessionId !== undefined) {
-    const owner = items.find(item => item.sessionIds?.includes(parentSessionId) === true)
-    if (owner !== undefined) return owner.workspaceId
-  }
-  if (cwd !== undefined) {
-    return items.find(item => item.path === cwd)?.workspaceId
-  }
-  return undefined
-}
-
-/**
  * Create a Chat-preset Session without navigating to it.
+ *
+ * 归属规则（ADR 0003）：Chat 会话**不继承**父会话的 `cwd` 与工作区。
+ * 父会话属于「某个工程」，而 Chat 会话属于 Chat 自己；继承会把对话写进项目
+ * 工作区，与工程会话混排。目标位置由 `chatWorkspaceId()` 给出（Chat 工作区），
+ * 拿不到时省略归属，会话落到宿主的默认目录。
  * @param deps - Host dependencies.
- * @param parentSessionId - optional Session whose cwd/workspace should be inherited.
+ * @param parentSessionId - 保留给调用方表达「从哪里开的新对话」；当前不影响归属。
  * @returns the created Session id, or undefined on any failure.
  */
 export async function createChatSession (
   deps: ChatSessionDeps,
-  parentSessionId?: string,
+  _parentSessionId?: string,
 ): Promise<string | undefined> {
   const { sessions } = deps
-  const cwd = readParentCwd(sessions, parentSessionId)
-  const workspaceId = readParentWorkspaceId(sessions, deps.workspaces, parentSessionId, cwd)
   const options: CreateOptions = { agentPreset: resolvePresetId(deps) }
-  if (cwd !== undefined) options.cwd = cwd
+  const workspaceId = deps.chatWorkspaceId?.()
   if (workspaceId !== undefined) options.workspaceId = workspaceId
 
   let created: unknown

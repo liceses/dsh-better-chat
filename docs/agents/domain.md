@@ -7,7 +7,7 @@ How the engineering skills should consume this repo's domain documentation when 
 ## Before exploring, read these
 
 - **`GLOSSARY.md`** at the repo root.
-- **`docs/adr/`**: read ADRs that touch the area you're about to work in. 现有：0001 动效体系（令牌→角色→原语 + 静态门禁）、0002 宿主新建会话入口（无动作槽 → 捕获拦截 + 自检告警）。
+- **`docs/adr/`**: read ADRs that touch the area you're about to work in. 现有：0001 动效体系（令牌→角色→原语 + 静态门禁）、0002 宿主新建会话入口（无动作槽 → 捕获拦截 + 自检告警）、0003 Chat 会话的归属 / 归档 / 右侧边栏 tab。
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
