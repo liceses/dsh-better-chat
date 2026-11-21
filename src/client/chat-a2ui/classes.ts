@@ -141,6 +141,8 @@ export const cls = {
   chatModeListItemTitle: 'caui-chat-list-item-title',
   chatModeListItemMeta: 'caui-chat-list-item-meta',
   chatModeRowAction: 'caui-chat-row-action',
+  chatModeListNotice: 'caui-chat-list-notice',
+  chatModeListNoticeError: 'caui-chat-list-notice-error',
   chatModeListError: 'caui-chat-list-error',
   chatModeListRetry: 'caui-chat-list-retry',
   chatModePanelIcon: 'caui-chat-panel-icon',

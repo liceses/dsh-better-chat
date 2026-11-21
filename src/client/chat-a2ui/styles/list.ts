@@ -347,6 +347,26 @@ export const LIST_CSS = `
   transition: background var(--caui-dur-sm) var(--caui-ease-out), border-color var(--caui-dur-sm) var(--caui-ease-out);
 }
 
+/* 归档反馈：成功给撤销、失败给原因。宿主没有给插件用的归档 toast，
+   所以撤销入口必须自己画。 */
+.caui-chat-list-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 8px 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--caui-glass-border);
+  border-radius: 8px;
+  background: var(--caui-glass-bg);
+  font-size: 12px;
+}
+
+.caui-chat-list-notice-error {
+  border-color: color-mix(in srgb, #dc2626 45%, var(--caui-glass-border));
+  color: #b91c1c;
+}
+
 /* 行尾的归档按钮：只在 hover / 键盘聚焦时出现，别让列表常态显得嘈杂。
    行本身是 button，所以这里用 span[role=button]，点击要 stopPropagation。 */
 .caui-chat-row-action {

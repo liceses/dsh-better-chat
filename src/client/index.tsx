@@ -95,8 +95,15 @@ export function apply (ctx: ClientContext): void {
     sidebarComponent: ChatSessionList,
     ensureChatWorkspace: ensure,
     chatWorkspaceId: () => chatWorkspaceId,
-    archiveSession: async (sessionId: string) => {
-      await archiveChatSession(ctx.uiWorkspace, sessionId)
+    archiveSession: (sessionId: string) => archiveChatSession(ctx.uiWorkspace, sessionId),
+    unarchiveSession: async (sessionId: string) => {
+      const restore = ctx.uiWorkspace.unarchiveSession
+      if (typeof restore !== 'function') return
+      try {
+        await restore(sessionId)
+      } catch (error) {
+        console.warn('[chat-a2ui] 撤销归档失败：', error)
+      }
     },
   })
 

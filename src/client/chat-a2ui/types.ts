@@ -199,7 +199,11 @@ export interface UiWorkspaceApi {
 
 export interface WorkspacesApi {
   list: {
-    getSnapshot: () => { items: readonly WorkspaceSummaryLike[] }
+    /** `archivedSessionIds` 是宿主的全局归档集（会话列表快照里没有这个字段）。 */
+    getSnapshot: () => {
+      items: readonly WorkspaceSummaryLike[]
+      archivedSessionIds?: readonly string[]
+    }
   }
   /**
    * 注册一个**已存在**的目录为 workspace（宿主契约：路径必须存在且是全限定路径）。
@@ -222,6 +226,14 @@ export interface SessionsApi {
     getSnapshot: () => SessionListSnapshot
     subscribe: (listener: () => void) => () => void
   }
+  /** 借一次会话绑定做操作（宿主 ISessions 上的方法；测试替身可以不给）。 */
+  using?: <T>(
+    sessionId: string,
+    options: { source: string },
+    fn: (reference: {
+      binding?: { session?: { rename?: (title: string) => Promise<unknown> } }
+    }) => Promise<T>,
+  ) => Promise<T>
 }
 
 export type UseChat = <T>(selector: (snapshot: ChatSnapshot) => T) => T
