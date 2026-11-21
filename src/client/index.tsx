@@ -17,7 +17,6 @@ import { ChatA2UIView } from './chat-a2ui/ChatA2UIView'
 import type { ImageAttachmentRef, SessionsApi, WorkspacesApi } from './chat-a2ui/types'
 import { ChatPage } from './chat-mode/ChatPage'
 import { ChatPanelIcon } from './chat-mode/ChatPanelIcon'
-import { createUseSessions } from './chat-mode/useSessions'
 import { ChatWorkspace } from './chat-mode/ChatWorkspace'
 import { ChatModeController } from './chat-mode/controller'
 import { ensureChatWorkspace, readInjectedChatPaths } from './chat-mode/chat-workspace'
@@ -90,9 +89,7 @@ export function apply (ctx: ClientContext): void {
     ensureChatWorkspace: ensure,
     chatWorkspaceId: () => chatWorkspaceId,
   })
-  // 面板内部自带会话列表：宿主左栏没有「追加一组」的座位（ADR 0003），
-  // 所以列表跟着面板走，左栏恢复成宿主原本的工作区树。
-  const useSessions = createUseSessions(ctx.sessions)
+
 
   /**
    * Branch from a rendered message. Inside the mounted Chat panel the child
@@ -122,7 +119,7 @@ export function apply (ctx: ClientContext): void {
       children: {
         'chat-a2ui.conversation': { kind: 'single', scope: 'session' },
       },
-      inject: () => ({ controller, sessions: ctx.sessions, useSessions }),
+      inject: () => ({ controller, sessions: ctx.sessions }),
     }, ChatPage as unknown as ComponentType<Record<string, unknown>>)
     // A child slot is owned by the entry that declared it: register the body
     // inside the same declaration lifetime, not in a separate inject group.

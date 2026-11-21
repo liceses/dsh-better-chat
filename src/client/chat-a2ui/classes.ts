@@ -163,8 +163,6 @@ export const cls = {
 
   chatModeBody: 'caui-chat-body',
   chatModeMain: 'caui-chat-main',
-  chatModeRail: 'caui-chat-rail',
-  chatModeRailToggle: 'caui-chat-rail-toggle',
   chatModeDock: 'caui-chat-dock',
   chatModeDockInner: 'caui-chat-dock-inner',
   chatModeDockHead: 'caui-chat-dock-head',

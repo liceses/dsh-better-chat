@@ -165,7 +165,6 @@ describe('动效系统的死层门禁', () => {
       'src/client/chat-a2ui/ChatA2UIView.tsx',
       'src/client/chat-mode/ChatPage.tsx',
       'src/client/chat-mode/ChatWorkspace.tsx',
-      'src/client/chat-mode/ChatSessionList.tsx',
     ]
     for (const rel of shells) {
       const source = readFileSync(join(ROOT, rel), 'utf8')
