@@ -15,7 +15,8 @@ import { CHAT_MODE_SOURCE, CHAT_PANEL_ID } from '../constants'
 import { cls } from '../chat-a2ui/classes'
 import { useMotionAttribute } from '../chat-a2ui/motion-scope'
 import { useChatStyles } from '../chat-a2ui/style'
-import type { SessionReferenceLike, SessionsApi } from '../chat-a2ui/types'
+import type { SessionReferenceLike, SessionsApi, UseSessions } from '../chat-a2ui/types'
+import { ChatSessionList } from './ChatSessionList'
 import type { ChatModeController } from './controller'
 import { useChatMode } from './useChatMode'
 
@@ -23,6 +24,8 @@ import { useChatMode } from './useChatMode'
 export interface ChatPageProps {
   controller: ChatModeController
   sessions: SessionsApi
+  /** 面板内部会话列表用的选择器 hook（由 apply 注入）。 */
+  useSessions: UseSessions
   /** Supplied by the renderer because this registration declares a Session child. */
   SessionProvider?: ComponentType<{ session: SessionReferenceLike; children?: ReactNode }>
   renderSlot: (name: string, props?: Record<string, unknown>) => ReactNode
@@ -51,9 +54,10 @@ function StatusPage ({ title, detail, action }: { title: string; detail: string;
  * Render the Chat shell for the controller's active Session.
  * @param props - controller, Sessions service, injected SessionProvider, and child renderer.
  */
-export function ChatPage ({ controller, sessions, SessionProvider, renderSlot }: ChatPageProps): ReactElement {
+export function ChatPage ({ controller, sessions, useSessions, SessionProvider, renderSlot }: ChatPageProps): ReactElement {
   useChatStyles()
   const mode = useChatMode(controller)
+  const [railOpen, setRailOpen] = useState(true)
   // 档位属性统一由 useMotionAttribute 给出（必须在提前 return 之前调用）。
   const motionAttrs = useMotionAttribute()
   const [entry, setEntry] = useState<Entry | null>(null)
@@ -143,11 +147,30 @@ export function ChatPage ({ controller, sessions, SessionProvider, renderSlot }:
     )
   }
 
+  const rail = (
+    <aside className={cls.chatModeRail} data-chat-rail="">
+      <button
+        type="button"
+        className={cls.chatModeRailToggle}
+        aria-expanded={railOpen}
+        aria-label={railOpen ? '收起对话列表' : '展开对话列表'}
+        title={railOpen ? '收起对话列表' : '展开对话列表'}
+        onClick={() => { setRailOpen(open => !open) }}
+      >
+        {railOpen ? '⟨' : '⟩'}
+      </button>
+      {railOpen && <ChatSessionList controller={controller} useSessions={useSessions} wide={false} />}
+    </aside>
+  )
+
   return (
-    <div className={cls.chatModePage} data-chat-panel={CHAT_PANEL_ID} {...motionAttrs}>
-      <SessionProvider session={entry.reference}>
-        {renderSlot('chat-a2ui.conversation', { controller })}
-      </SessionProvider>
+    <div className={cls.chatModePage} data-chat-panel={CHAT_PANEL_ID} data-rail={railOpen ? 'open' : 'closed'} {...motionAttrs}>
+      {rail}
+      <div className={cls.chatModeMain}>
+        <SessionProvider session={entry.reference}>
+          {renderSlot('chat-a2ui.conversation', { controller })}
+        </SessionProvider>
+      </div>
     </div>
   )
 }

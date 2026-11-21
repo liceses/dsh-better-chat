@@ -1,4 +1,10 @@
-/** Chat-only Session list shown in the left Sidebar while Chat mode is open. */
+/**
+ * Chat-only Session list.
+ *
+ * 它现在挂在 **Chat 面板内部**（可折叠轨道），而不是宿主左栏的
+ * `sidebar.workspaces` 座位——那个座位是单占位，进去就把宿主的工作区树顶掉
+ * （ADR 0003）。
+ */
 
 import { useMemo } from 'react'
 import type { ReactElement } from 'react'
@@ -14,7 +20,7 @@ import type { ChatModeController } from './controller'
 import { chatRowTitle, listChatSessions } from './select'
 import { useChatMode } from './useChatMode'
 
-/** Props injected into the sidebar.workspaces occupant. */
+/** Props of the in-panel session list. */
 export interface ChatSessionListProps {
   controller: ChatModeController
   useSessions: UseSessions

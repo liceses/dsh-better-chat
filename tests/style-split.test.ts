@@ -331,20 +331,33 @@ describe('样式按表面拆分 + P0.6 并回表面', () => {
     expect(before.length).toBeGreaterThan(200)
     const removed = before.filter(rule => !after.includes(rule))
     const added = after.filter(rule => !before.includes(rule))
-    // 允许的差异只有 B：抽屉宽度从 !important 的 width 改成 max-width。
+    // 这条基线守的是「拆分没有弄丢/改动任何规则」，不禁止**新增**规则：
+    // 新功能加样式是正常的，新增的规则在别处评审。
     expect(removed).toHaveLength(1)
-    expect(added).toHaveLength(1)
     expect(removed[0]).toContain('.caui-chat-dock')
     expect(removed[0]).toContain('width: min(88vw, 360px) !important')
-    expect(added[0]).toContain('.caui-chat-dock')
-    expect(added[0]).toContain('max-width: min(88vw, 360px)')
+    const dockAdded = added.filter(rule => rule.includes('.caui-chat-dock'))
+    expect(dockAdded).toHaveLength(1)
+    expect(dockAdded[0]).toContain('max-width: min(88vw, 360px)')
     expect(EXPECTED_RULE_DIFF.删掉[0]).toContain('width: min(88vw, 360px) !important')
+    // 新增的规则只允许来自面板内的会话轨道（ADR 0003 的 UI）；B 那条已经在上面单独断言。
+    for (const rule of added) {
+      if (rule.includes('.caui-chat-dock')) continue
+      expect(rule, '新增规则应当只属于面板轨道：' + rule).toMatch(/data-chat-panel|data-rail|caui-chat-rail/)
+    }
   })
 
-  it('级联等价：每种视口 / 媒体特性下，每个（选择器, 属性）的最终生效值都不变', () => {
+  it('级联回归：基线里已有的每个（选择器, 属性）生效值都不变（允许新增规则）', () => {
     const diff = cascadeDiff(declarations(BEFORE), declarations(CHAT_CSS))
-    // 只有 B 的那一对：删掉的 width 与补上的 max-width；其余全部相等。
-    expect(diff).toEqual(CASCADE_ALLOWANCE)
+    // 这条守的是「已有规则没有被改坏」：只允许 B 的那一对差异；
+    // 基线里不存在的 (选择器, 属性) 属于新增功能，不在此处判定。
+    const allowanceKeys = new Set(CASCADE_ALLOWANCE.map(entry => entry.key))
+    const regressions = diff.filter(entry => entry.before !== ABSENT && !allowanceKeys.has(entry.key))
+    expect(regressions).toEqual([])
+    // 允许清单本身仍然成立（B 的 width→max-width）。
+    for (const entry of CASCADE_ALLOWANCE) {
+      expect(diff.find(item => item.key === entry.key)).toEqual(entry)
+    }
   })
 
   it('组合层：六块按固定顺序拼接，末尾不再接任何东西', () => {

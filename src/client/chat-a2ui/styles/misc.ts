@@ -182,6 +182,43 @@ export const MISC_CSS = `
   min-height: 0;
 }
 
+/* 面板内的会话轨道：左栏没有「追加一组」的座位（ADR 0003），列表跟着面板走。
+   收起时只留一条 30px 的把手，不占正文宽度。 */
+.caui-chat-page[data-chat-panel] {
+  flex-direction: row;
+}
+
+.caui-chat-rail {
+  display: flex;
+  flex: 0 0 232px;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--caui-border);
+}
+
+.caui-chat-page[data-rail="closed"] .caui-chat-rail {
+  flex-basis: 30px;
+}
+
+.caui-chat-rail-toggle {
+  flex: 0 0 auto;
+  margin: 6px;
+  height: 26px;
+  border: 1px solid var(--caui-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--caui-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.caui-chat-rail-toggle:hover {
+  color: var(--caui-fg);
+  border-color: var(--caui-accent);
+}
+
 /* 右侧轨迹栏：默认折叠，展开时由 Framer Motion 驱动宽度 --------------- */
 .caui-chat-dock {
   position: relative;

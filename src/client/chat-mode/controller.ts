@@ -8,25 +8,10 @@
  * occupant.
  */
 
-import type { ComponentType } from 'react'
 import { CHAT_PANEL_ID } from '../constants'
-import type { SessionListSnapshot, SessionsApi, UseSessions, WorkspacesApi } from '../chat-a2ui/types'
+import type { SessionListSnapshot, SessionsApi, WorkspacesApi } from '../chat-a2ui/types'
 import { createChatSession, forkChatAt } from '../session/actions'
 import { listChatSessions, pickChatSession } from './select'
-
-/** Props the controller injects into the Chat sidebar occupant. */
-export interface ChatSidebarProps {
-  controller: ChatModeController
-  useSessions: UseSessions
-}
-
-/** Rendered in the sidebar workspace area while Chat mode is mounted. */
-export type ChatSidebarComponent = ComponentType<ChatSidebarProps>
-
-/** Minimal Slots face needed to install and withdraw the sidebar occupant. */
-export interface ChatModeSlots {
-  register: (options: Record<string, unknown>, component: unknown) => () => void
-}
 
 /** Minimal layout face needed to enter/leave the Chat panel. */
 export interface ChatModeLayout {
@@ -37,9 +22,7 @@ export interface ChatModeLayout {
 export interface ChatModeDeps {
   sessions: SessionsApi
   workspaces?: WorkspacesApi
-  slots: ChatModeSlots
   layout: ChatModeLayout
-  sidebarComponent: ChatSidebarComponent
   /**
    * 确保 Chat 工作区存在（首次创建会话前 await 一次）。
    * 失败不阻断创建：会话退回宿主默认目录，只是归属退化。
@@ -88,7 +71,6 @@ export class ChatModeController {
   private mounted = false
   private generation = 0
   private creating: Promise<string | undefined> | null = null
-  private disposeSidebar: (() => void) | null = null
   private pendingNewPromise: Promise<string | undefined> | null = null
   private resolvePendingNew: ((value: string | undefined) => void) | null = null
   /**
@@ -120,31 +102,6 @@ export class ChatModeController {
     for (const listener of this.listeners) listener()
   }
 
-  /** Install the Chat-session list in the sidebar workspace area. */
-  private registerSidebar (): void {
-    this.disposeSidebar?.()
-    try {
-      this.disposeSidebar = this.deps.slots.register({
-        name: 'sidebar.workspaces',
-        priority: -10,
-        inject: () => ({ controller: this }),
-      }, this.deps.sidebarComponent)
-    } catch (error) {
-      console.warn('[chat-a2ui] 安装 Chat 会话列表失败：', error)
-      this.disposeSidebar = null
-    }
-  }
-
-  /** Remove the sidebar occupant installed by {@link mount}. */
-  private releaseSidebar (): void {
-    try {
-      this.disposeSidebar?.()
-    } catch (error) {
-      console.warn('[chat-a2ui] 卸载 Chat 会话列表失败：', error)
-    }
-    this.disposeSidebar = null
-  }
-
   /** Resolve a pending enterNew() call once the panel has created or failed. */
   private finishPending (value: string | undefined): void {
     const resolve = this.resolvePendingNew
@@ -159,7 +116,6 @@ export class ChatModeController {
     this.mounted = true
     this.generation += 1
     const generation = this.generation
-    this.registerSidebar()
     this.setState({ mounted: true, phase: 'opening', error: null })
     void this.ensureActive(generation)
   }
@@ -169,7 +125,6 @@ export class ChatModeController {
     if (!this.mounted) return
     this.mounted = false
     this.generation += 1
-    this.releaseSidebar()
     this.finishPending(undefined)
     this.setState({ mounted: false, phase: 'idle', error: null, pendingNew: false })
   }
