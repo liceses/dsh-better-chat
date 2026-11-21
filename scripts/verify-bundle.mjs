@@ -68,6 +68,7 @@ const registrations = []
 const disposed = []
 const opened = []
 const selectedPanels = []
+const tabTypes = []
 const ctx = {
   slots: {
     inject (name, body) {
@@ -102,6 +103,7 @@ const ctx = {
     list: { getSnapshot: () => ({ items: [{ workspaceId: 'ws-one', path: 'D:/work', sessionIds: ['legacy'] }] }) },
   },
   layout: { selectPanel: (panelId) => selectedPanels.push(panelId) },
+  sidebarRightTabs: { register: (definition) => { tabTypes.push(definition); return () => {} } },
   uiWorkspace: { openSession: (id) => opened.push(id) },
   uiConversation: { imageUrl: (sessionId, attachment) => 'blob:' + sessionId + '/' + attachment.attachmentId },
 }
@@ -139,6 +141,24 @@ assert.equal(typeof view.component, 'function')
 const viewInjected = view.options.inject('legacy')
 assert.equal(viewInjected.loadImage({ attachmentId: 'a1' }), 'blob:legacy/a1')
 assert.equal(typeof viewInjected.forkAt, 'function')
+
+// The right-Sidebar Chat tab: its own Session picker needs the ISessions service,
+// so the body registration must carry it, and the session-scoped child slot must
+// still be declared for the conversation content.
+const tabType = tabTypes.find(definition => definition.id === 'chat-a2ui.chat')
+assert.ok(tabType, 'rightbar Chat tab type not registered')
+assert.equal(tabType.multiple, false)
+assert.equal(tabType.keepMounted, true)
+const tabBody = registrations.find(r => r.options.name === 'sidebar.right.pane.tab')
+assert.ok(tabBody, 'rightbar Chat tab body not registered')
+assert.equal(tabBody.options.key, 'chat-a2ui.chat')
+assert.deepEqual(tabBody.options.children, {
+  'chat-a2ui.rightbar.conversation': { kind: 'single', scope: 'session' },
+})
+assert.equal(tabBody.options.inject().sessions, ctx.sessions)
+const tabConversation = registrations.find(r => r.options.name === 'chat-a2ui.rightbar.conversation')
+assert.ok(tabConversation, 'rightbar conversation slot not registered')
+assert.equal(typeof tabConversation.component, 'function')
 
 const header = registrations.find(r => r.options.name === 'conversation.session.header.actions')
 assert.ok(header, 'header action not registered')

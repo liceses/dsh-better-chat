@@ -477,6 +477,72 @@ export const MISC_CSS = `
   background: var(--caui-glass-bg);
 }
 
+/* 右栏 Chat tab：顶部一行会话下拉 + 会话正文 ------------------------------- */
+/* 作用域说明：这个 tab 在宿主的右侧边栏里，外层没有 .caui-root，所以这里
+   直接桥接宿主的 --dsw-* 设计变量，并都带一个亮色回退值。 */
+.caui-chat-rightbar {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.caui-chat-rightbar-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(28, 28, 34, 0.12));
+}
+
+/* 紧凑到 24px 高：右栏本来就窄，下拉只占一行，标题过长由浏览器自己省略。 */
+.caui-chat-rightbar-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--dsw-alias-border-l2, rgba(28, 28, 34, 0.18));
+  border-radius: 6px;
+  background: var(--dsw-subtle, rgba(28, 28, 34, 0.045));
+  color: inherit;
+  font-family: inherit;
+  font-size: 11.5px;
+  line-height: 1;
+}
+
+.caui-chat-rightbar-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.caui-chat-rightbar-notice {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  color: var(--dsw-danger, #d33b3b);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* retain 还没落地的那一帧的占位：不先画旧会话，免得下拉和正文说的是两个人。 */
+.caui-chat-rightbar-switching {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  color: var(--dsw-muted-foreground, #6a6a76);
+  font-size: 12px;
+}
+
 @media (max-width: 900px) {
   .caui-chat-header {
     padding: 9px 12px;

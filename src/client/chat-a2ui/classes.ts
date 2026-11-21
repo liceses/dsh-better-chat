@@ -177,6 +177,14 @@ export const cls = {
   chatModeBlankTitle: 'caui-chat-blank-title',
   chatModeBlankHint: 'caui-chat-blank-hint',
   chatModeBlankOrb: 'caui-chat-blank-orb',
+
+  // 右栏 Chat tab：顶部一行会话下拉 + 会话正文（见 styles/misc.ts）
+  chatRightbar: 'caui-chat-rightbar',
+  chatRightbarBar: 'caui-chat-rightbar-bar',
+  chatRightbarSelect: 'caui-chat-rightbar-select',
+  chatRightbarBody: 'caui-chat-rightbar-body',
+  chatRightbarNotice: 'caui-chat-rightbar-notice',
+  chatRightbarSwitching: 'caui-chat-rightbar-switching',
 } as const
 
 export type ChatClass = typeof cls[keyof typeof cls]

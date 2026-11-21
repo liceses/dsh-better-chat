@@ -182,7 +182,8 @@ export function apply (ctx: ClientContext): void {
   // ── 右栏 Chat tab ────────────────────────────────────────────────────────
   // 类型 + 正文（guide 卡片是发现入口）；没有 sidebarRight* 服务时静默跳过。
   if (ctx.sidebarRightTabs !== undefined) {
-    registerRightbarChat(ctx.slots, ctx.sidebarRightTabs)
+    // sessions 一起传进去：tab 里换会话要自己 retain / release 引用。
+    registerRightbarChat(ctx.slots, ctx.sidebarRightTabs, ctx.sessions)
   }
 
   /** 会话头部按钮：开/关右栏的 Chat tab（没有右栏服务时整个按钮不渲染）。 */
