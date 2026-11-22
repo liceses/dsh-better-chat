@@ -106,8 +106,9 @@ export function apply (ctx: ClientContext): void {
     archiveSession: (sessionId: string) => archiveChatSession(ctx.uiWorkspace, sessionId),
     renameSession: (sessionId: string, title: string) => renameChatSession(ctx.sessions, sessionId, title),
     unarchiveSession: async (sessionId: string) => {
-      const restore = ctx.uiWorkspace.unarchiveSession
-      if (typeof restore !== 'function') return
+      if (typeof ctx.uiWorkspace.unarchiveSession !== 'function') return
+      // 同上：摘下来会丢 this。
+      const restore = ctx.uiWorkspace.unarchiveSession.bind(ctx.uiWorkspace)
       try {
         await restore(sessionId)
       } catch (error) {

@@ -34,8 +34,10 @@ export async function renameChatSession (
 ): Promise<RenameResult> {
   const next = normalize(title)
   if (next.length === 0) return { ok: false, reason: '标题不能为空' }
-  const using = sessions.using
-  if (typeof using !== 'function') return { ok: false, reason: '宿主没有提供会话绑定' }
+  if (typeof sessions.using !== 'function') return { ok: false, reason: '宿主没有提供会话绑定' }
+  // 必须绑在服务上调用：using() 内部第一件事就是 this.retain(...)，
+  // 把方法摘下来会丢 this，报的正是「Cannot read properties of undefined (reading 'retain')」。
+  const using = sessions.using.bind(sessions)
   try {
     await using(sessionId, { source: 'chatMode' }, async (reference) => {
       const face = reference.binding?.session

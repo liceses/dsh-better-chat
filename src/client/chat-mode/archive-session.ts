@@ -31,9 +31,12 @@ export async function archiveChatSession (
   api: UiWorkspaceApi | undefined,
   sessionId: string,
 ): Promise<ArchiveResult> {
-  const archive = api?.archiveSession
-  if (typeof archive !== 'function') return { ok: false, reason: '宿主没有提供归档能力' }
+  if (api === undefined || typeof api.archiveSession !== 'function') {
+    return { ok: false, reason: '宿主没有提供归档能力' }
+  }
   if (sessionId.length === 0) return { ok: false, reason: '没有选中对话' }
+  // 必须绑在服务上：宿主的 archiveSession 内部会读自己的状态，摘下来调用会丢 this。
+  const archive = api.archiveSession.bind(api)
   try {
     await archive(sessionId)
     return { ok: true }

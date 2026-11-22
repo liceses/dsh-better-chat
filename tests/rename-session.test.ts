@@ -51,6 +51,29 @@ describe('renameChatSession', () => {
     warn.mockRestore()
   })
 
+  it('调用 using 时必须保留 this（摘下来会报 retain of undefined）', async () => {
+    let seen: unknown
+    const sessions: SessionsApi = {
+      create: async () => 'x',
+      fork: async () => 'y',
+      list: { getSnapshot: () => ({ ids: [], byId: {} }), subscribe: () => () => {} },
+      // 故意写成「依赖 this」的方法：this 丢了就抛与宿主一致的错。
+      using: async function (this: unknown, _id, _options, fn) {
+        seen = this
+        const self = this as { marker?: string } | undefined
+        if (self === undefined || self.marker !== 'sessions') {
+          throw new Error("Cannot read properties of undefined (reading 'retain')")
+        }
+        return fn({ binding: { session: { rename: async () => undefined } } })
+      } as SessionsApi['using'],
+    }
+    ;(sessions as unknown as { marker: string }).marker = 'sessions'
+
+    const result = await renameChatSession(sessions, 's1', '标题')
+    expect(result).toEqual({ ok: true })
+    expect(seen).toBe(sessions)
+  })
+
   it('其它错误给一句可展示的话', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const harness = makeSessions({ rename: async () => { throw new Error('boom') } })

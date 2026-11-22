@@ -31,6 +31,19 @@ describe('archiveChatSession', () => {
     warn.mockRestore()
   })
 
+  it('调用归档时必须保留 this（摘下来会丢服务状态）', async () => {
+    const api = {
+      marker: 'uiWorkspace',
+      // 故意依赖 this：丢了就抛与宿主同类错误。
+      async archiveSession (this: { marker?: string } | undefined) {
+        if (this === undefined || this.marker !== 'uiWorkspace') {
+          throw new Error("Cannot read properties of undefined (reading 'closed')")
+        }
+      },
+    } as unknown as UiWorkspaceApi
+    await expect(archiveChatSession(api, 's1')).resolves.toEqual({ ok: true })
+  })
+
   it('其它错误也给一句可展示的话', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const api: UiWorkspaceApi = {
